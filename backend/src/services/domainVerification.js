@@ -74,8 +74,11 @@ class DomainVerificationService {
       verified_at: null
     };
 
+    let txtResult = null;
+    let cnameResult = null;
+
     if (method === 'TXT' || method === 'AUTO') {
-      const txtResult = await this.verifyTXTRecord(domain, token);
+      txtResult = await this.verifyTXTRecord(domain, token);
       if (txtResult.verified) {
         result.verified = true;
         result.method = 'TXT';
@@ -86,7 +89,7 @@ class DomainVerificationService {
 
     if (method === 'CNAME' || method === 'AUTO') {
       const verifySubdomain = `verify.${domain}`;
-      const cnameResult = await this.verifyCNAMERecord(verifySubdomain, token);
+      cnameResult = await this.verifyCNAMERecord(verifySubdomain, token);
       if (cnameResult.verified) {
         result.verified = true;
         result.method = 'CNAME';
@@ -95,7 +98,7 @@ class DomainVerificationService {
       }
     }
 
-    result.reason = txtResult.reason || cnameResult.reason;
+    result.reason = (txtResult && txtResult.reason) || (cnameResult && cnameResult.reason) || 'Verification failed';
     return result;
   }
 
