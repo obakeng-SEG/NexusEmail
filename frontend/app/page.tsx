@@ -7,7 +7,8 @@ import {
   Eye, Moon, Sun, ChevronRight, Server, Mail, Key,
   FileText, BarChart3, Bell, Plug, Clock, Wrench,
   TrendingUp, TrendingDown, Minus, Download, Trash2,
-  CheckSquare, Square, MoreHorizontal, Save, MailPlus
+  CheckSquare, Square, MoreHorizontal, Save, MailPlus,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,16 @@ export default function Dashboard() {
   const [brandScanning, setBrandScanning] = useState(false);
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
+  
+  // Brand Protection Advanced
+  const [monitoredBrands, setMonitoredBrands] = useState<any[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<any>(null);
+  const [showTakedownModal, setShowTakedownModal] = useState(false);
+  const [showThreatModal, setShowThreatModal] = useState(false);
+  const [takedownForm, setTakedownForm] = useState({ domain: '', threat_type: 'impersonation', evidence: '', contact_email: '' });
+  const [threatForm, setThreatForm] = useState({ domain: '', threat_type: 'manual', severity: 'medium', notes: '' });
+  const [brandThreats, setBrandThreats] = useState<any[]>([]);
+  const [brandTakedowns, setBrandTakedowns] = useState<any[]>([]);
 
   // Load data on mount
   useEffect(() => {
@@ -53,9 +64,80 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/brands`);
       const data = await res.json();
       setBrands(data);
+      setMonitoredBrands(data);
     } catch (e) {
       console.error('Failed to load brands:', e);
     }
+  };
+
+  const loadBrandThreats = async (brandId: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/brands/${brandId}/threats`);
+      const data = await res.json();
+      setBrandThreats(data);
+    } catch (e) {
+      console.error('Failed to load threats:', e);
+    }
+  };
+
+  const loadBrandTakedowns = async (brandId: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/brands/${brandId}/takedowns`);
+      const data = await res.json();
+      setBrandTakedowns(data);
+    } catch (e) {
+      console.error('Failed to load takedowns:', e);
+    }
+  };
+
+  const markAsSafe = async (brandId: number, domain: string) => {
+    try {
+      await fetch(`${API_BASE}/brands/${brandId}/safe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain })
+      });
+      loadBrands();
+      loadBrandThreats(brandId);
+    } catch (e) {
+      console.error('Failed to mark as safe:', e);
+    }
+  };
+
+  const submitTakedown = async (brandId: number) => {
+    try {
+      await fetch(`${API_BASE}/brands/${brandId}/takedown`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(takedownForm)
+      });
+      setShowTakedownModal(false);
+      setTakedownForm({ domain: '', threat_type: 'impersonation', evidence: '', contact_email: '' });
+      loadBrandTakedowns(brandId);
+    } catch (e) {
+      console.error('Failed to submit takedown:', e);
+    }
+  };
+
+  const addThreat = async (brandId: number) => {
+    try {
+      await fetch(`${API_BASE}/brands/${brandId}/threat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(threatForm)
+      });
+      setShowThreatModal(false);
+      setThreatForm({ domain: '', threat_type: 'manual', severity: 'medium', notes: '' });
+      loadBrandThreats(brandId);
+    } catch (e) {
+      console.error('Failed to add threat:', e);
+    }
+  };
+
+  const openBrandDetails = async (brand: any) => {
+    setSelectedBrand(brand);
+    loadBrandThreats(brand.id);
+    loadBrandTakedowns(brand.id);
   };
 
   const loadDomains = async () => {
@@ -820,6 +902,9 @@ export default function Dashboard() {
                             }}>
                               <Search className="w-4 h-4 mr-1" /> Scan
                             </Button>
+                            <Button variant="outline" size="sm" onClick={() => openBrandDetails(brand)}>
+                              <Eye className="w-4 h-4" />
+                            </Button>
                             <Button variant="ghost" size="sm" onClick={() => {
                               fetch(`${API_BASE}/brands/${brand.id}`, { method: 'DELETE' }).then(() => loadBrands());
                             }}>
@@ -993,6 +1078,188 @@ export default function Dashboard() {
             <p>NexusEmail — Open Source Email Security Platform</p>
           </div>
         </footer>
+
+        {/* Brand Details Modal */}
+        {selectedBrand && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedBrand(null)}>
+            <div className="bg-background border rounded-lg w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-bold">{selectedBrand.domain}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedBrand.brand_name}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedBrand(null)}>
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => setShowTakedownModal(true)}>
+                    <Zap className="w-4 h-4 mr-1" /> Submit Takedown
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowThreatModal(true)}>
+                    <AlertTriangle className="w-4 h-4 mr-1" /> Add Threat
+                  </Button>
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    Tracked Threats ({brandThreats.length})
+                  </h4>
+                  {brandThreats.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No threats tracked</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {brandThreats.map((threat: any) => (
+                        <div key={threat.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                          <div>
+                            <p className="font-medium text-sm">{threat.domain}</p>
+                            <div className="flex gap-2 mt-1">
+                              <Badge variant={threat.severity === 'high' ? 'destructive' : threat.severity === 'medium' ? 'default' : 'secondary'} className="text-xs">
+                                {threat.threat_type}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">{threat.severity}</Badge>
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" title="Mark as Safe" onClick={() => markAsSafe(selectedBrand.id, threat.domain)}>
+                              <CheckCircle className="w-4 h-4 text-emerald-500" />
+                            </Button>
+                            <Button variant="ghost" size="sm" title="Submit Takedown" onClick={() => {
+                              setTakedownForm({ ...takedownForm, domain: threat.domain });
+                              setShowTakedownModal(true);
+                            }}>
+                              <Zap className="w-4 h-4 text-amber-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-indigo-500" />
+                    Takedown Requests ({brandTakedowns.length})
+                  </h4>
+                  {brandTakedowns.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No takedown requests</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {brandTakedowns.map((takedown: any) => (
+                        <div key={takedown.id} className="p-3 border rounded-lg bg-muted/30">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm">{takedown.domain}</p>
+                              <p className="text-xs text-muted-foreground">{takedown.threat_type} • {takedown.provider}</p>
+                            </div>
+                            <Badge variant={takedown.status === 'completed' ? 'default' : takedown.status === 'in_progress' ? 'secondary' : 'outline'}>
+                              {takedown.status}
+                            </Badge>
+                          </div>
+                          {takedown.notes && <p className="text-xs text-muted-foreground mt-2">{takedown.notes}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {selectedBrand.safe_list && selectedBrand.safe_list.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-3 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-emerald-500" />
+                      Safe List ({selectedBrand.safe_list.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedBrand.safe_list.map((domain: string, i: number) => (
+                        <Badge key={i} variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600">
+                          {domain}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showTakedownModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowTakedownModal(false)}>
+            <div className="bg-background border rounded-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold mb-4">Submit Takedown Request</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm">Domain</label>
+                  <Input value={takedownForm.domain} onChange={(e) => setTakedownForm({ ...takedownForm, domain: e.target.value })} placeholder="bad-domain.com" />
+                </div>
+                <div>
+                  <label className="text-sm">Threat Type</label>
+                  <select className="w-full p-2 border rounded" value={takedownForm.threat_type} onChange={(e) => setTakedownForm({ ...takedownForm, threat_type: e.target.value })}>
+                    <option value="impersonation">Impersonation</option>
+                    <option value="typosquatting">Typosquatting</option>
+                    <option value="phishing">Phishing</option>
+                    <option value="fake_store">Fake Store</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm">Evidence / Notes</label>
+                  <textarea className="w-full p-2 border rounded" rows={3} value={takedownForm.evidence} onChange={(e) => setTakedownForm({ ...takedownForm, evidence: e.target.value })} placeholder="Describe the abuse..." />
+                </div>
+                <div>
+                  <label className="text-sm">Contact Email</label>
+                  <Input value={takedownForm.contact_email} onChange={(e) => setTakedownForm({ ...takedownForm, contact_email: e.target.value })} placeholder="legal@yourbrand.com" />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={() => submitTakedown(selectedBrand?.id)}>Submit Request</Button>
+                  <Button variant="ghost" onClick={() => setShowTakedownModal(false)}>Cancel</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showThreatModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowThreatModal(false)}>
+            <div className="bg-background border rounded-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold mb-4">Add Manual Threat</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm">Domain</label>
+                  <Input value={threatForm.domain} onChange={(e) => setThreatForm({ ...threatForm, domain: e.target.value })} placeholder="fake-brand.com" />
+                </div>
+                <div>
+                  <label className="text-sm">Threat Type</label>
+                  <select className="w-full p-2 border rounded" value={threatForm.threat_type} onChange={(e) => setThreatForm({ ...threatForm, threat_type: e.target.value })}>
+                    <option value="manual">Manual</option>
+                    <option value="impersonation">Impersonation</option>
+                    <option value="typosquatting">Typosquatting</option>
+                    <option value="phishing">Phishing</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm">Severity</label>
+                  <select className="w-full p-2 border rounded" value={threatForm.severity} onChange={(e) => setThreatForm({ ...threatForm, severity: e.target.value })}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm">Notes</label>
+                  <textarea className="w-full p-2 border rounded" rows={2} value={threatForm.notes} onChange={(e) => setThreatForm({ ...threatForm, notes: e.target.value })} />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={() => addThreat(selectedBrand?.id)}>Add Threat</Button>
+                  <Button variant="ghost" onClick={() => setShowThreatModal(false)}>Cancel</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
