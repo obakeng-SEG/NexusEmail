@@ -581,17 +581,47 @@ export default function Dashboard() {
       'AWS Route53': ['access_key_id', 'secret_access_key', 'region'],
       'GoDaddy': ['api_key', 'secret'],
       'DigitalOcean': ['api_token'],
-      'Vercel': ['token']
+      'Vercel': ['token'],
+      'Namecheap': ['api_key', 'username', 'ip'],
+      'NameSilo': ['api_key'],
+      'Gandi': ['api_key'],
+      'DNSimple': ['access_token', 'account_id'],
+      'Linode': ['access_token'],
+      'Porkbun': ['api_key', 'secret'],
+      'ClouDNS': ['auth_id', 'auth_password'],
+      'Google Cloud DNS': ['project_id', 'access_token'],
+      'Azure DNS': ['subscription_id', 'resource_group', 'access_token'],
+      'Aliyun': ['access_key_id', 'access_key_secret', 'region'],
+      'DNSPod': ['token'],
+      'NS1': ['api_key'],
+      'Bunny DNS': ['api_key'],
+      'UltraDNS': ['username', 'password'],
+      'EdgeDNS': ['access_token', 'cp_code']
     };
     return fields[providerName] || ['api_key'];
   };
 
   const dnsProviders = [
-    { name: 'Cloudflare', icon: Server, connected: false },
-    { name: 'AWS Route53', icon: Server, connected: false },
-    { name: 'GoDaddy', icon: Server, connected: false },
-    { name: 'DigitalOcean', icon: Server, connected: false },
-    { name: 'Vercel', icon: Server, connected: false },
+    { name: 'Cloudflare', icon: Server },
+    { name: 'AWS Route53', icon: Server },
+    { name: 'GoDaddy', icon: Server },
+    { name: 'DigitalOcean', icon: Server },
+    { name: 'Vercel', icon: Server },
+    { name: 'Namecheap', icon: Server },
+    { name: 'NameSilo', icon: Server },
+    { name: 'Gandi', icon: Server },
+    { name: 'DNSimple', icon: Server },
+    { name: 'Linode', icon: Server },
+    { name: 'Porkbun', icon: Server },
+    { name: 'ClouDNS', icon: Server },
+    { name: 'Google Cloud DNS', icon: Server },
+    { name: 'Azure DNS', icon: Server },
+    { name: 'Aliyun', icon: Server },
+    { name: 'DNSPod', icon: Server },
+    { name: 'NS1', icon: Server },
+    { name: 'Bunny DNS', icon: Server },
+    { name: 'UltraDNS', icon: Server },
+    { name: 'EdgeDNS', icon: Server },
   ];
 
   if (loading) {
