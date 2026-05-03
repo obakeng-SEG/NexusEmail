@@ -5,8 +5,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const domainRoutes = require('./routes/domains');
-const scanRoutes = require('./routes/scans');
-const integrationRoutes = require('./routes/integrations');
 const { router: settingsRoutes } = require('./routes/settings');
 const brandProtectionRoutes = require('./routes/brandProtection');
 const remediationRoutes = require('./routes/remediation');
@@ -33,8 +31,6 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/domains', domainRoutes);
-app.use('/api/scans', scanRoutes);
-app.use('/api/integrations', integrationRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/brands', brandProtectionRoutes);
 app.use('/api/domains', remediationRoutes);
