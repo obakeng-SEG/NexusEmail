@@ -148,40 +148,149 @@ class BrandProtectionService {
 
   async checkTypoSquats(baseName, mainDomain) {
     const records = [];
-    const variations = [];
+    const variations = new Set();
+    const tld = mainDomain.split('.').slice(1).join('.') || 'com';
 
-    // Generate common typos
-    for (const char of baseName) {
-      if (char === 'o') variations.push(baseName.replace('o', '0'));
-      if (char === 'l' || char === 'i') variations.push(baseName.replace(/[li]/g, '1'));
-      if (char === 'a') variations.push(baseName.replace('a', 'e'));
-      if (char === 'e') variations.push(baseName.replace('e', 'a'));
-    }
+    // Keyboard adjacent mappings (QWERTY)
+    const keyboardAdjacent = {
+      'a': ['q', 'w', 's', 'z'],
+      'b': ['v', 'g', 'h', 'n'],
+      'c': ['x', 'd', 'f', 'v'],
+      'd': ['s', 'e', 'r', 'f', 'c', 'x'],
+      'e': ['w', 's', 'd', 'r'],
+      'f': ['d', 'r', 't', 'g', 'v', 'c'],
+      'g': ['f', 't', 'y', 'h', 'b', 'v'],
+      'h': ['g', 'y', 'u', 'j', 'n', 'b'],
+      'i': ['u', 'j', 'k', 'o'],
+      'j': ['h', 'u', 'i', 'k', 'm', 'n'],
+      'k': ['j', 'i', 'o', 'l', 'm'],
+      'l': ['k', 'o', 'p'],
+      'm': ['n', 'j', 'k'],
+      'n': ['b', 'h', 'j', 'm'],
+      'o': ['i', 'k', 'l', 'p'],
+      'p': ['o', 'l'],
+      'q': ['w', 'a'],
+      'r': ['e', 'd', 'f', 't'],
+      's': ['a', 'w', 'e', 'd', 'x', 'z'],
+      't': ['r', 'f', 'g', 'y'],
+      'u': ['y', 'h', 'j', 'i'],
+      'v': ['c', 'f', 'g', 'b'],
+      'w': ['q', 'a', 's', 'e'],
+      'x': ['z', 's', 'd', 'c'],
+      'y': ['t', 'g', 'h', 'u'],
+      'z': ['a', 's', 'x'],
+      '0': ['o', 'p'],
+      '1': ['l', 'o', '2'],
+    };
 
-    // Add double letters
+    const charReplacements = {
+      'o': ['0', 'a'],
+      'l': ['1', 'i', 't'],
+      'i': ['1', 'l', 'o'],
+      'e': ['a', 'o', '3'],
+      'a': ['e', 'o', '4'],
+      's': ['5', 'a'],
+      'g': ['q', '9'],
+    };
+
+    // 1. Single character replacement (only ONE position)
     for (let i = 0; i < baseName.length; i++) {
-      variations.push(baseName.slice(0, i) + baseName[i] + baseName.slice(i));
+      const char = baseName[i];
+      
+      // Keyboard adjacent
+      if (keyboardAdjacent[char]) {
+        for (const adj of keyboardAdjacent[char]) {
+          variations.add(baseName.slice(0, i) + adj + baseName.slice(i + 1));
+        }
+      }
+      
+      // Common confusables
+      if (charReplacements[char]) {
+        for (const rep of charReplacements[char]) {
+          variations.add(baseName.slice(0, i) + rep + baseName.slice(i + 1));
+        }
+      }
     }
 
-    // Remove single char
+    // 2. Character swap (adjacent)
+    for (let i = 0; i < baseName.length - 1; i++) {
+      const swapped = baseName.slice(0, i) + baseName[i + 1] + baseName[i] + baseName.slice(i + 2);
+      variations.add(swapped);
+    }
+
+    // 3. Double letters (add)
     for (let i = 0; i < baseName.length; i++) {
-      variations.push(baseName.slice(0, i) + baseName.slice(i + 1));
+      variations.add(baseName.slice(0, i) + baseName[i] + baseName[i] + baseName.slice(i));
     }
 
-    // Check these variations against common TLDs
-    for (const variant of [...new Set(variations)].slice(0, 20)) {
-      for (const tld of this.commonTLDs.slice(0, 5)) {
-        const domain = `${variant}.${tld}`;
+    // 4. Double letters (remove one)
+    for (let i = 0; i < baseName.length - 1; i++) {
+      if (baseName[i] === baseName[i + 1]) {
+        variations.add(baseName.slice(0, i) + baseName[i] + baseName.slice(i + 2));
+      }
+    }
+
+    // 5. Remove single character
+    for (let i = 0; i < baseName.length; i++) {
+      variations.add(baseName.slice(0, i) + baseName.slice(i + 1));
+    }
+
+    // 6. Add hyphen (for compound words)
+    if (baseName.length > 4) {
+      for (let i = 1; i < baseName.length - 1; i++) {
+        variations.add(baseName.slice(0, i) + '-' + baseName.slice(i));
+      }
+    }
+
+    // 7. Missing character (insert random)
+    const insertChars = ['a', 'e', 'i', 'o', 's', 't'];
+    for (let i = 0; i < baseName.length; i++) {
+      for (const c of insertChars) {
+        variations.add(baseName.slice(0, i) + c + baseName.slice(i));
+      }
+    }
+
+    // Check variations against TLDs
+    const tldsToCheck = [tld, 'com', 'net', 'org', 'io', 'co'];
+    
+    for (const variant of [...variations].slice(0, 50)) {
+      if (variant === baseName || variant.length < 2) continue;
+      
+      for (const checkTld of tldsToCheck) {
+        const domain = `${variant}.${checkTld}`;
+        if (domain === mainDomain) continue;
+        
         try {
-          await dns.resolve(domain);
-          records.push({ domain, type: 'typosquat', tld, status: 'registered' });
+          // Check if domain resolves (A record)
+          const addresses = await dns.resolve4(domain);
+          
+          // Check for MX records (email-relevant)
+          let hasMX = false;
+          try {
+            const mx = await dns.resolveMx(domain);
+            hasMX = mx.length > 0;
+          } catch (e) {}
+          
+          records.push({
+            domain,
+            type: hasMX ? 'typosquat_with_email' : 'typosquat',
+            tld: checkTld,
+            status: 'registered',
+            hasMailServer: hasMX,
+            hasWebsite: addresses.length > 0
+          });
         } catch (e) {
           // Domain doesn't exist
         }
       }
     }
 
-    return { records: records.slice(0, 10), found: records.length };
+    // Deduplicate and return
+    const uniqueRecords = records.filter((r, i, arr) => 
+      arr.findIndex(x => x.domain === r.domain) === i
+    );
+
+    return { records: uniqueRecords.slice(0, 20), found: uniqueRecords.length };
   }
 
   async checkLookalikes(baseName, mainDomain) {
