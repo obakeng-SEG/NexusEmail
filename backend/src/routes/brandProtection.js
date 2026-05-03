@@ -101,6 +101,25 @@ router.post('/check/:id', async (req, res) => {
   res.json(result);
 });
 
+// Alerts routes (must be before /:id)
+router.get('/alerts', (req, res) => {
+  const alerts = db.getSetting('brand_alerts') || '[]';
+  const allAlerts = JSON.parse(alerts);
+  res.json(allAlerts.slice(-50).reverse());
+});
+
+router.delete('/alerts/:alertId', (req, res) => {
+  const alerts = JSON.parse(db.getSetting('brand_alerts') || '[]');
+  const filtered = alerts.filter(a => a.id !== parseInt(req.params.alertId));
+  db.setSetting('brand_alerts', JSON.stringify(filtered));
+  res.json({ success: true });
+});
+
+router.post('/alerts/clear', (req, res) => {
+  db.setSetting('brand_alerts', JSON.stringify([]));
+  res.json({ success: true, message: 'All alerts cleared' });
+});
+
 router.get('/:id', (req, res) => {
   const brands = JSON.parse(db.getSetting('monitored_brands') || '[]');
   const brand = brands.find(b => b.id === parseInt(req.params.id));
@@ -282,18 +301,6 @@ router.get('/alerts', (req, res) => {
   const alerts = db.getSetting('brand_alerts') || '[]';
   const allAlerts = JSON.parse(alerts);
   res.json(allAlerts.slice(-50).reverse());
-});
-
-router.delete('/alerts/:alertId', (req, res) => {
-  const alerts = JSON.parse(db.getSetting('brand_alerts') || '[]');
-  const filtered = alerts.filter(a => a.id !== parseInt(req.params.alertId));
-  db.setSetting('brand_alerts', JSON.stringify(filtered));
-  res.json({ success: true });
-});
-
-router.post('/alerts/clear', (req, res) => {
-  db.setSetting('brand_alerts', JSON.stringify([]));
-  res.json({ success: true, message: 'All alerts cleared' });
 });
 
 router.delete('/:id', (req, res) => {
