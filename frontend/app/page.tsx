@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [fixRecommendations, setFixRecommendations] = useState<any>(null);
   const [integrations, setIntegrations] = useState([]);
   const [notifications, setNotifications] = useState({});
   const [activeTab, setActiveTab] = useState("domains");
@@ -210,17 +211,8 @@ export default function Dashboard() {
         return;
       }
 
-      // Show analysis in an alert
-      let message = `Email Provider: ${data.email_provider?.provider || 'Unknown'}\n`;
-      message += `MX Records: ${data.mx_records?.length || 0}\n`;
-      message += `Auto-fix supported: ${data.email_provider?.supported ? 'Yes' : 'No (manual)'}\n\n`;
-      message += `Issues found: ${data.issues?.length || 0}\n\n`;
-      message += `Recommended Records:\n`;
-      if (data.recommended_records?.spf) message += `- SPF: ${data.recommended_records.spf.recommended}\n`;
-      if (data.recommended_records?.dmarc) message += `- DMARC: ${data.recommended_records.dmarc.recommended}\n`;
-      message += `\n${data.instructions}`;
-      
-      alert(message);
+      setFixRecommendations(data);
+      setShowDetails(true);
     } catch (e) {
       alert('Failed to analyze domain: ' + e.message);
     }
@@ -325,40 +317,98 @@ export default function Dashboard() {
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div>
                   <CardTitle className="text-lg">{selectedDomain.name}</CardTitle>
-                  <CardDescription>Scan Results & Issues</CardDescription>
+                  <CardDescription>Scan Results & Recommended Fixes</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setShowDetails(false)}>Close</Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => fixDomain(selectedDomain.id)}>
+                    <Wrench className="w-4 h-4 mr-1" /> Get Fix Records
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setShowDetails(false)}>Close</Button>
+                </div>
               </CardHeader>
               <CardContent>
+                {/* DNS Status Cards */}
                 <div className="grid md:grid-cols-3 gap-4 mb-4">
                   <div className={`p-4 rounded-lg border ${selectedDomain.latest_scan?.spf_status === 'PASS' ? 'border-emerald-500 bg-emerald-500/10' : 'border-amber-500 bg-amber-500/10'}`}>
-                    <p className="text-sm text-muted-foreground mb-1">SPF</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium">SPF</p>
+                      <span className="text-xs cursor-help" title="Sender Policy Framework - Specifies which mail servers can send email for your domain">?</span>
+                    </div>
                     <p className="font-semibold">{selectedDomain.latest_scan?.spf_status || 'Unknown'}</p>
-                    {selectedDomain.latest_scan?.spf_record && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{JSON.parse(selectedDomain.latest_scan.spf_record).record?.substring(0, 50)}</p>
-                    )}
+                    <p className="text-xs text-muted-foreground mt-1">Authorizes senders for your domain</p>
                   </div>
                   <div className={`p-4 rounded-lg border ${selectedDomain.latest_scan?.dkim_status === 'PASS' ? 'border-emerald-500 bg-emerald-500/10' : 'border-amber-500 bg-amber-500/10'}`}>
-                    <p className="text-sm text-muted-foreground mb-1">DKIM</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium">DKIM</p>
+                      <span className="text-xs cursor-help" title="DomainKeys Identified Mail - Cryptographic signature to verify email hasn't been tampered">?</span>
+                    </div>
                     <p className="font-semibold">{selectedDomain.latest_scan?.dkim_status || 'Unknown'}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Digital signature verification</p>
                   </div>
                   <div className={`p-4 rounded-lg border ${selectedDomain.latest_scan?.dmarc_status === 'PASS' ? 'border-emerald-500 bg-emerald-500/10' : 'border-amber-500 bg-amber-500/10'}`}>
-                    <p className="text-sm text-muted-foreground mb-1">DMARC</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium">DMARC</p>
+                      <span className="text-xs cursor-help" title="Domain-based Message Authentication - Policy for handling failed auth">?</span>
+                    </div>
                     <p className="font-semibold">{selectedDomain.latest_scan?.dmarc_status || 'Unknown'}</p>
-                    {selectedDomain.latest_scan?.dmarc_record && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{JSON.parse(selectedDomain.latest_scan.dmarc_record).policy || 'No policy'}</p>
-                    )}
+                    <p className="text-xs text-muted-foreground mt-1">Policy for SPF/DKIM failures</p>
                   </div>
                 </div>
+
+                {/* Issues with Tooltips */}
                 {selectedDomain.issues?.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-4">
                     <p className="font-medium text-sm">Issues Found:</p>
                     {selectedDomain.issues.map((issue: any, i: number) => (
                       <div key={i} className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/30">
                         <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        <span className="text-sm">{issue.title || issue.type || issue}</span>
+                        <span className="text-sm">{issue.message || issue.type || issue}</span>
+                        {issue.type === 'SPF' && (
+                          <span className="text-xs text-muted ml-auto" title="Add a TXT record with 'v=spf1 include:_spf.yourdomain.com ~all'">Fix: Add SPF record</span>
+                        )}
+                        {issue.type === 'DMARC' && (
+                          <span className="text-xs text-muted ml-auto" title="Add a TXT record with 'v=DMARC1; p=quarantine; rua=mailto:reports@yourdomain.com'">Fix: Add DMARC record</span>
+                        )}
+                        {issue.type === 'MTA-STS' && (
+                          <span className="text-xs text-muted ml-auto" title="Add _mta-sts TXT record for SMTP TLS enforcement">Fix: Add MTA-STS record</span>
+                        )}
+                        {issue.type === 'TLS-RPT' && (
+                          <span className="text-xs text-muted ml-auto" title="Add _smtp._tls TXT record for TLS reporting">Fix: Add TLS-RPT record</span>
+                        )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Recommendations Section */}
+                {fixRecommendations && (
+                  <div className="space-y-3 mt-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
+                    <p className="font-medium text-sm">Recommended DNS Records:</p>
+                    <div className="grid gap-2 text-xs font-mono">
+                      {fixRecommendations.recommended_records?.spf && (
+                        <div className="p-2 bg-background rounded border">
+                          <span className="text-muted">SPF:</span> {fixRecommendations.recommended_records.spf.recommended}
+                        </div>
+                      )}
+                      {fixRecommendations.recommended_records?.dmarc && (
+                        <div className="p-2 bg-background rounded border">
+                          <span className="text-muted">DMARC:</span> {fixRecommendations.recommended_records.dmarc.recommended}
+                        </div>
+                      )}
+                      {fixRecommendations.recommended_records?.mta_sts && (
+                        <div className="p-2 bg-background rounded border">
+                          <span className="text-muted">MTA-STS:</span> {fixRecommendations.recommended_records.mta_sts.recommended}
+                        </div>
+                      )}
+                      {fixRecommendations.recommended_records?.tls_rpt && (
+                        <div className="p-2 bg-background rounded border">
+                          <span className="text-muted">TLS-RPT:</span> {fixRecommendations.recommended_records.tls_rpt.recommended}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted">
+                      Provider: {fixRecommendations.email_provider?.provider} | Auto-fix: {fixRecommendations.auto_fix_supported ? 'Supported' : 'Manual only'}
+                    </p>
                   </div>
                 )}
               </CardContent>
