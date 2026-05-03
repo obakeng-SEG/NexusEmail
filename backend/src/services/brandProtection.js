@@ -204,49 +204,234 @@ class BrandProtectionService {
   }
 
   async getRegistrarInfo(domain) {
+    console.log('[BrandProtection] getRegistrarInfo called for:', domain);
     try {
       const whoisData = await this.whoisLookup(domain);
+      console.log('[BrandProtection] WHOIS result:', whoisData);
       return whoisData;
     } catch (e) {
+      console.log('[BrandProtection] WHOIS error:', e.message);
       return { registrar: 'Unknown', abuse_email: null, created_date: null };
     }
   }
 
   async whoisLookup(domain) {
+    const parts = domain.split('.');
+    const tld = parts.pop();
+    const secondLevel = parts[parts.length - 1];
+    
+    // Comprehensive WHOIS servers for different TLDs
+    const whoisServers = {
+      // Major global TLDs
+      'com': 'whois.verisign.com',
+      'net': 'whois.verisign.com',
+      'org': 'whois.pir.org',
+      'edu': 'whois.educause.edu',
+      'gov': 'whois.dotgov.gov',
+      
+      // New gTLDs
+      'io': 'whois.io',
+      'co': 'whois.nic.co',
+      'ai': 'whois.nic.ai',
+      'app': 'whois.nic.google',
+      'dev': 'whois.nic.google',
+      'xyz': 'whois.nic.xyz',
+      'wiki': 'whois.nic.wiki',
+      'rest': 'whois.nic.rest',
+      'ink': 'whois.nic.ink',
+      'online': 'whois.nic.online',
+      'site': 'whois.nic.site',
+      'host': 'whois.nic.host',
+      'website': 'whois.nic.website',
+      'store': 'whois.nic.store',
+      'tech': 'whois.nic.tech',
+      'space': 'whois.nic.space',
+      'biz': 'whois.biz',
+      'info': 'whois.afilias.info',
+      'mobi': 'whois.nic.mobi',
+      
+      // European TLDs
+      'eu': 'whois.eu',
+      'uk': 'whois.nic.uk',
+      'de': 'whois.denic.de',
+      'fr': 'whois.nic.fr',
+      'es': 'whois.nic.es',
+      'it': 'whois.nic.it',
+      'nl': 'whois.nl',
+      'pl': 'whois.dns.pl',
+      'ch': 'whois.nic.ch',
+      'at': 'whois.nic.at',
+      
+      // Asian TLDs
+      'jp': 'whois.jprs.jp',
+      'kr': 'whois.kr',
+      'cn': 'whois.cnnic.cn',
+      'in': 'whois.inregistry.in',
+      'th': 'whois.thnic.co.th',
+      'my': 'whois.mynic.my',
+      'sg': 'whois.sgnic.sg',
+      'ph': 'whois.dot.ph',
+      
+      // Latin American TLDs
+      'br': 'whois.registro.br',
+      'mx': 'whois.nic.mx',
+      'ar': 'whois.nic.ar',
+      'cl': 'whois.nic.cl',
+      'co': 'whois.nic.co',
+      
+      // African TLDs
+      'za': 'whois.registry.za',
+      'co.za': 'coza.whois-servers.net',
+      'org.za': 'whois.org.za',
+      'net.za': 'whois.net.za',
+      'web.za': 'whois.web.za',
+      'africa': 'whois.africanregistry.ent',
+      'ng': 'whois.nic.ng',
+      'ke': 'whois.kenic.or.ke',
+      'gh': 'whois.nic.gh',
+      'tz': 'whois.tznic.or.tz',
+      
+      // Other TLDs
+      'ru': 'whois.tcinet.ru',
+      'ua': 'whois.ua',
+      'tr': 'whois.nic.tr',
+      'il': 'whois.isoc.org.il',
+      'nz': 'whois.nzrs.org.nz',
+      'au': 'whois.auda.org.au',
+      'ca': 'whois.cira.ca',
+    };
+    
+    // Special handling for SA TLDs (.co.za, .org.za, etc) - use domains.co.za
+    if (tld === 'za' || domain.includes('.co.za') || domain.endsWith('.za')) {
+      return this.domainsCoZaLookup(domain);
+    }
+    
+    const server = whoisServers[tld] || 'whois.verisign.com';
+    
     return new Promise((resolve) => {
-      const options = {
-        hostname: 'whois.iana.org',
-        path: '/' + domain,
-        method: 'GET',
-        timeout: 5000
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          const result = { registrar: 'Unknown', abuse_email: null, created_date: null };
-          
-          const lines = data.split('\n');
-          for (const line of lines) {
-            if (line.toLowerCase().startsWith('registrar:')) {
-              result.registrar = line.split(':').slice(1).join(':').trim();
-            }
-            if (line.toLowerCase().includes('abuse') && line.includes('@')) {
-              const match = line.match(/[\w.-]+@[\w.-]+/);
-              if (match) result.abuse_email = match[0];
-            }
-            if (line.toLowerCase().startsWith('created:')) {
-              result.created_date = line.split(':').slice(1).join(':').trim();
-            }
-          }
-          resolve(result);
-        });
+      const net = require('net');
+      const client = new net.Socket();
+      
+      client.setTimeout(5000);
+      
+      client.connect(43, server, () => {
+        client.write(domain + '\r\n');
       });
+      
+      client.on('data', (data) => {
+        const result = { registrar: 'Unknown', abuse_email: null, created_date: null };
+        const whoisData = data.toString();
+        
+        const lines = whoisData.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('Registrar:')) {
+            result.registrar = trimmed.replace('Registrar:', '').trim();
+          }
+          if (trimmed.startsWith('Registrar WHOIS Server:') && result.registrar === 'Unknown') {
+            result.registrar = trimmed.replace('Registrar WHOIS Server:', '').trim();
+          }
+          if (trimmed.includes('Abuse Contact Email')) {
+            const match = trimmed.match(/([\w.-]+@[\w.-]+)/);
+            if (match) result.abuse_email = match[1];
+          }
+          if (trimmed.startsWith('Creation Date:')) {
+            result.created_date = trimmed.replace('Creation Date:', '').trim();
+          }
+        }
+        
+        client.destroy();
+        resolve(result);
+      });
+      
+      client.on('timeout', () => { client.destroy(); resolve({ registrar: 'Unknown', abuse_email: null, created_date: null }); });
+      client.on('error', () => resolve({ registrar: 'Unknown', abuse_email: null, created_date: null }));
+    });
+  }
 
-      req.on('error', () => resolve({ registrar: 'Unknown', abuse_email: null, created_date: null }));
-      req.on('timeout', () => { req.destroy(); resolve({ registrar: 'Unknown', abuse_email: null, created_date: null }); });
-      req.end();
+  async domainsCoZaLookup(domain) {
+    try {
+      // Use domains.co.za WHOIS XML API
+      const response = await fetch(`https://www.domains.co.za/whois/${domain}`, {
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!response.ok) {
+        // Fallback to direct WHOIS
+        return this.fallbackWhois(domain, 'coza.whois-servers.net');
+      }
+      
+      const text = await response.text();
+      
+      const result = { registrar: 'Unknown', abuse_email: null, created_date: null };
+      
+      // Parse common patterns
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const lower = line.toLowerCase();
+        if (lower.includes('registrar') && result.registrar === 'Unknown') {
+          const match = line.match(/[:=]\s*(.+)/i);
+          if (match) result.registrar = match[1].trim();
+        }
+        if (lower.includes('abuse') && line.includes('@')) {
+          const match = line.match(/([\w.-]+@[\w.-]+)/);
+          if (match) result.abuse_email = match[1];
+        }
+        if (lower.includes('created') || lower.includes('registered')) {
+          const match = line.match(/[:=]\s*(.+)/i);
+          if (match && !result.created_date) result.created_date = match[1].trim();
+        }
+      }
+      
+      // If no registrar found, use fallback
+      if (result.registrar === 'Unknown') {
+        return this.fallbackWhois(domain, 'coza.whois-servers.net');
+      }
+      
+      return result;
+    } catch (e) {
+      // Fallback to direct WHOIS
+      return this.fallbackWhois(domain, 'coza.whois-servers.net');
+    }
+  }
+
+  async fallbackWhois(domain, server) {
+    return new Promise((resolve) => {
+      const net = require('net');
+      const client = new net.Socket();
+      
+      client.setTimeout(5000);
+      client.connect(43, server, () => {
+        client.write(domain + '\r\n');
+      });
+      
+      client.on('data', (data) => {
+        const result = { registrar: 'Unknown', abuse_email: null, created_date: null };
+        const whoisData = data.toString();
+        
+        const lines = whoisData.split('\n');
+        for (const line of lines) {
+          const lower = line.toLowerCase();
+          if (lower.includes('registrar') && result.registrar === 'Unknown') {
+            const match = line.match(/[:=]\s*(.+)/i);
+            if (match) result.registrar = match[1].trim();
+          }
+          if (lower.includes('abuse') && line.includes('@')) {
+            const match = line.match(/([\w.-]+@[\w.-]+)/);
+            if (match) result.abuse_email = match[1];
+          }
+          if ((lower.includes('created') || lower.includes('registered')) && !result.created_date) {
+            const match = line.match(/[:=]\s*(.+)/i);
+            if (match) result.created_date = match[1].trim();
+          }
+        }
+        
+        client.destroy();
+        resolve(result);
+      });
+      
+      client.on('timeout', () => { client.destroy(); resolve({ registrar: 'Unknown', abuse_email: null, created_date: null }); });
+      client.on('error', () => resolve({ registrar: 'Unknown', abuse_email: null, created_date: null }));
     });
   }
 

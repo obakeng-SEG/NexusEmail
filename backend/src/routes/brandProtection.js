@@ -219,8 +219,10 @@ router.post('/:id/takedown', async (req, res) => {
   if (!brands[brandIndex].takedowns) brands[brandIndex].takedowns = [];
   
   const brand = brands[brandIndex];
-  const lastResults = brand.last_results || {};
-  const registrar = lastResults.registrar || { registrar: 'Unknown', abuse_email: null };
+  
+  // Lookup registrar for the BAD domain (not the brand)
+  const domainRegistrar = await brandService.getRegistrarInfo(domain);
+  const registrar = domainRegistrar.registrar ? domainRegistrar : { registrar: 'Unknown', abuse_email: null };
   
   const takedown = {
     id: Date.now(),
@@ -242,7 +244,7 @@ router.post('/:id/takedown', async (req, res) => {
   
   if (registrar.abuse_email) {
     try {
-      const NotificationService = require('../services/notifications');
+      const { NotificationService } = require('../services/notifications');
       const notifService = new NotificationService();
       
       // Load SMTP config from database
