@@ -201,13 +201,28 @@ export default function Dashboard() {
   };
 
   const fixDomain = async (domainId: number) => {
-    if (!confirm('Attempt to auto-fix issues for this domain?')) return;
     try {
-      await fetch(`${API_BASE}/domains/${domainId}/remediate`, { method: 'POST' });
-      alert('Remediation initiated');
-      loadDomains();
+      const res = await fetch(`${API_BASE}/domains/${domainId}/analyze-fix`, { method: 'POST' });
+      const data = await res.json();
+      
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+
+      // Show analysis in an alert
+      let message = `Email Provider: ${data.email_provider?.provider || 'Unknown'}\n`;
+      message += `MX Records: ${data.mx_records?.length || 0}\n`;
+      message += `Auto-fix supported: ${data.email_provider?.supported ? 'Yes' : 'No (manual)'}\n\n`;
+      message += `Issues found: ${data.issues?.length || 0}\n\n`;
+      message += `Recommended Records:\n`;
+      if (data.recommended_records?.spf) message += `- SPF: ${data.recommended_records.spf.recommended}\n`;
+      if (data.recommended_records?.dmarc) message += `- DMARC: ${data.recommended_records.dmarc.recommended}\n`;
+      message += `\n${data.instructions}`;
+      
+      alert(message);
     } catch (e) {
-      alert('Remediation failed');
+      alert('Failed to analyze domain: ' + e.message);
     }
   };
 
