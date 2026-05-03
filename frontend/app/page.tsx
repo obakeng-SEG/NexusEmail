@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState({});
   const [activeTab, setActiveTab] = useState("domains");
   const [brands, setBrands] = useState([]);
+  const [domainFilter, setDomainFilter] = useState<string | null>(null);
 
   // Load data on mount
   useEffect(() => {
@@ -283,12 +284,12 @@ export default function Dashboard() {
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
             {[
-              { label: "Total Domains", value: stats.total, icon: Globe, color: "indigo", tab: "domains" },
-              { label: "Passing", value: stats.passing, icon: CheckCircle, color: "emerald", tab: "domains" },
-              { label: "Warnings", value: stats.warnings, icon: AlertTriangle, color: "amber", tab: "domains" },
-              { label: "Failed", value: stats.failed, icon: XCircle, color: "rose", tab: "domains" },
+              { label: "Total Domains", value: stats.total, icon: Globe, color: "indigo", filter: null },
+              { label: "Passing", value: stats.passing, icon: CheckCircle, color: "emerald", filter: "passing" },
+              { label: "Warnings", value: stats.warnings, icon: AlertTriangle, color: "amber", filter: "warnings" },
+              { label: "Failed", value: stats.failed, icon: XCircle, color: "rose", filter: "failed" },
             ].map((stat, i) => (
-              <Card key={i} className="border-border/40 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setActiveTab(stat.tab)}>
+              <Card key={i} className="border-border/40 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => { setActiveTab("domains"); setDomainFilter(stat.tab === "domains" ? null : stat.tab); }}>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-xl bg-${stat.color}-500/10 flex items-center justify-center`}>
                     <stat.icon className={`w-6 h-6 text-${stat.color}-500`} />
@@ -339,6 +340,18 @@ export default function Dashboard() {
                 </div>
               )}
 
+              {domainFilter && (
+                <div className="mb-4 flex items-center gap-2 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+                  <span className="text-sm text-indigo-400">Filtering by:</span>
+                  <Badge variant="outline" className="border-indigo-500 text-indigo-400">
+                    {domainFilter}
+                  </Badge>
+                  <Button variant="ghost" size="sm" onClick={() => setDomainFilter(null)} className="ml-auto">
+                    Clear
+                  </Button>
+                </div>
+              )}
+
               <Card className="border-border/40">
                 <CardContent className="p-0">
                   <table className="w-full">
@@ -365,7 +378,10 @@ export default function Dashboard() {
                             No domains added yet. Add a domain above to get started.
                           </td>
                         </tr>
-                      ) : domains.map((domain) => (
+                      ) : (domainFilter === 'passing' ? domains.filter(d => (d.last_score || 0) >= 80) :
+                        domainFilter === 'warnings' ? domains.filter(d => (d.last_score || 0) >= 50 && (d.last_score || 0) < 80) :
+                        domainFilter === 'failed' ? domains.filter(d => (d.last_score || 0) < 50) :
+                        domains).map((domain) => (
                         <tr key={domain.id} className="border-b border-border/20 hover:bg-muted/30">
                           <td className="p-4">
                             <Button variant="ghost" size="icon" onClick={() => toggleSelect(domain.id)}>
