@@ -832,10 +832,39 @@ export default function Dashboard() {
 
                   {/* Scan Results Display */}
                   {brandScanning && (
-                    <div className="mt-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
+                    <div className="mt-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30 space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm">Scanning for typosquatting and impersonation...</span>
+                        <span className="text-sm font-medium">Scanning brand protection...</span>
+                      </div>
+                      
+                      {/* Progress Hints */}
+                      <div className="space-y-2 text-xs">
+                        <div className={`flex items-center gap-2 ${brandScanResult?.progress?.[0]?.complete ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {brandScanResult?.progress?.[0]?.complete ? '✓' : '○'} Detecting DNS provider
+                        </div>
+                        <div className={`flex items-center gap-2 ${brandScanResult?.progress?.[1]?.complete ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {brandScanResult?.progress?.[1]?.complete ? '✓' : '○'} Checking typosquatting variations
+                        </div>
+                        <div className={`flex items-center gap-2 ${brandScanResult?.progress?.[2]?.complete ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {brandScanResult?.progress?.[2]?.complete ? '✓' : '○'} Checking lookalike domains
+                        </div>
+                        <div className={`flex items-center gap-2 ${brandScanResult?.progress?.[3]?.complete ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {brandScanResult?.progress?.[3]?.complete ? '✓' : '○'} Checking subdomain abuse
+                        </div>
+                        <div className={`flex items-center gap-2 ${brandScanResult?.progress?.[4]?.complete ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {brandScanResult?.progress?.[4]?.complete ? '✓' : '○'} Checking social media variants
+                        </div>
+                        <div className={`flex items-center gap-2 ${brandScanResult?.progress?.[5]?.complete ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                          {brandScanResult?.progress?.[5]?.complete ? '✓' : '○'} Checking homograph attacks
+                        </div>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ 
+                          width: `${(brandScanResult?.progress?.filter((p: any) => p.complete).length || 0) * 16.67}%` 
+                        }} />
                       </div>
                     </div>
                   )}
@@ -856,6 +885,10 @@ export default function Dashboard() {
                               <p className="font-bold text-lg">{brandScanResult.score}/100</p>
                             </div>
                             <div className="p-2 bg-muted rounded">
+                              <p className="text-muted-foreground">DNS Provider</p>
+                              <p className="font-medium">{brandScanResult.dns_provider?.name || 'Unknown'}</p>
+                            </div>
+                            <div className="p-2 bg-muted rounded">
                               <p className="text-muted-foreground">Typosquatting</p>
                               <p className="font-medium">{brandScanResult.typosquatting?.length || 0} found</p>
                             </div>
@@ -866,6 +899,10 @@ export default function Dashboard() {
                             <div className="p-2 bg-muted rounded">
                               <p className="text-muted-foreground">Impersonation</p>
                               <p className="font-medium">{brandScanResult.impersonation?.length || 0} found</p>
+                            </div>
+                            <div className="p-2 bg-muted rounded">
+                              <p className="text-muted-foreground">NS Records</p>
+                              <p className="font-medium text-xs truncate">{brandScanResult.dns_provider?.ns || '-'}</p>
                             </div>
                           </div>
                           {brandScanResult.issues?.length > 0 && (
