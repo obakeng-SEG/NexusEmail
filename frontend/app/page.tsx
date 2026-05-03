@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [integrations, setIntegrations] = useState([]);
   const [notifications, setNotifications] = useState({});
   const [activeTab, setActiveTab] = useState("domains");
@@ -188,6 +189,30 @@ export default function Dashboard() {
     failed: domains.filter(d => (d.last_score || 0) < 40).length
   };
 
+  const viewDomain = async (domain: any) => {
+    try {
+      const res = await fetch(`${API_BASE}/domains/${domain.id}`);
+      const data = await res.json();
+      setSelectedDomain(data);
+      setShowDetails(true);
+    } catch (e) {
+      console.error('Failed to load domain details:', e);
+    }
+  };
+
+  const fixDomain = async (domainId: number) => {
+    if (!confirm('Attempt to auto-fix issues for this domain?')) return;
+    try {
+      await fetch(`${API_BASE}/domains/${domainId}/remediate`, { method: 'POST' });
+      alert('Remediation initiated');
+      loadDomains();
+    } catch (e) {
+      alert('Remediation failed');
+    }
+  };
+
+  const [showDetails, setShowDetails] = useState(false);
+
   const dnsProviders = [
     { name: 'Cloudflare', icon: Server, connected: false },
     { name: 'AWS Route53', icon: Server, connected: false },
@@ -280,6 +305,52 @@ export default function Dashboard() {
               </Card>
             </div>
           </div>
+
+          {/* Domain Details Panel */}
+          {showDetails && selectedDomain && (
+            <Card className="border-indigo-500/50 mb-6">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle className="text-lg">{selectedDomain.name}</CardTitle>
+                  <CardDescription>Scan Results & Issues</CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowDetails(false)}>Close</Button>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  <div className={`p-4 rounded-lg border ${selectedDomain.latest_scan?.spf_status === 'PASS' ? 'border-emerald-500 bg-emerald-500/10' : 'border-amber-500 bg-amber-500/10'}`}>
+                    <p className="text-sm text-muted-foreground mb-1">SPF</p>
+                    <p className="font-semibold">{selectedDomain.latest_scan?.spf_status || 'Unknown'}</p>
+                    {selectedDomain.latest_scan?.spf_record && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{JSON.parse(selectedDomain.latest_scan.spf_record).record?.substring(0, 50)}</p>
+                    )}
+                  </div>
+                  <div className={`p-4 rounded-lg border ${selectedDomain.latest_scan?.dkim_status === 'PASS' ? 'border-emerald-500 bg-emerald-500/10' : 'border-amber-500 bg-amber-500/10'}`}>
+                    <p className="text-sm text-muted-foreground mb-1">DKIM</p>
+                    <p className="font-semibold">{selectedDomain.latest_scan?.dkim_status || 'Unknown'}</p>
+                  </div>
+                  <div className={`p-4 rounded-lg border ${selectedDomain.latest_scan?.dmarc_status === 'PASS' ? 'border-emerald-500 bg-emerald-500/10' : 'border-amber-500 bg-amber-500/10'}`}>
+                    <p className="text-sm text-muted-foreground mb-1">DMARC</p>
+                    <p className="font-semibold">{selectedDomain.latest_scan?.dmarc_status || 'Unknown'}</p>
+                    {selectedDomain.latest_scan?.dmarc_record && (
+                      <p className="text-xs text-muted-foreground mt-1 truncate">{JSON.parse(selectedDomain.latest_scan.dmarc_record).policy || 'No policy'}</p>
+                    )}
+                  </div>
+                </div>
+                {selectedDomain.issues?.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="font-medium text-sm">Issues Found:</p>
+                    {selectedDomain.issues.map((issue: any, i: number) => (
+                      <div key={i} className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/30">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" />
+                        <span className="text-sm">{issue.title || issue.type || issue}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
@@ -409,13 +480,13 @@ export default function Dashboard() {
                           </td>
                           <td className="p-4">
                             <div className="flex gap-1">
-                              <Button size="sm" variant="ghost" onClick={() => scanDomain(domain.id)}>
+                              <Button size="sm" variant="ghost" onClick={() => scanDomain(domain.id)} title="Scan">
                                 <RefreshCw className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost">
+                              <Button size="sm" variant="ghost" onClick={() => viewDomain(domain)} title="View Details">
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              <Button size="sm" variant="ghost">
+                              <Button size="sm" variant="ghost" onClick={() => fixDomain(domain.id)} title="Auto-Fix">
                                 <Wrench className="w-4 h-4" />
                               </Button>
                             </div>

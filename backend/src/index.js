@@ -9,6 +9,7 @@ const scanRoutes = require('./routes/scans');
 const integrationRoutes = require('./routes/integrations');
 const { router: settingsRoutes } = require('./routes/settings');
 const brandProtectionRoutes = require('./routes/brandProtection');
+const remediationRoutes = require('./routes/remediation');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -36,6 +37,7 @@ app.use('/api/scans', scanRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/brands', brandProtectionRoutes);
+app.use('/api/domains', remediationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
