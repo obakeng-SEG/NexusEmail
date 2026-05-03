@@ -8,6 +8,7 @@ const domainRoutes = require('./routes/domains');
 const { router: settingsRoutes } = require('./routes/settings');
 const brandProtectionRoutes = require('./routes/brandProtection');
 const remediationRoutes = require('./routes/remediation');
+const reportsRoutes = require('./routes/reports');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -34,6 +35,7 @@ app.use('/api/domains', domainRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/brands', brandProtectionRoutes);
 app.use('/api/domains', remediationRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

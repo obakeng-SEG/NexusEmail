@@ -1,0 +1,135 @@
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+
+const db = require('../db/database');
+
+// Ensure reports directory exists
+const reportsDir = path.join(__dirname, '../../data/reports');
+if (!fs.existsSync(reportsDir)) {
+  fs.mkdirSync(reportsDir, { recursive: true });
+}
+
+// Generate single domain HTML report
+router.get('/domains/:id/report', async (req, res) => {
+  try {
+    const domain = db.getDomain(parseInt(req.params.id));
+    if (!domain) return res.status(404).json({ error: 'Domain not found' });
+
+    const scans = db.getScans(domain.id) || [];
+    const issues = { high: 0, medium: 0, low: 0 };
+    scans.forEach(scan => {
+      if (scan.issues) {
+        try {
+          JSON.parse(scan.issues).forEach(issue => {
+            if (issue.severity === 'high') issues.high++;
+            else if (issue.severity === 'medium') issues.medium++;
+            else issues.low++;
+          });
+        } catch (e) {}
+      }
+    });
+
+    const html = generateReportHtml(domain, scans, issues);
+    res.type('html').send(html);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Export all domains as CSV
+router.get('/export/csv', (req, res) => {
+  try {
+    const domains = db.getDomains();
+    let csv = 'Domain,Provider,Score,Last Scan,Verified,SPF,DKIM,DMARC\n';
+    
+    domains.forEach(d => {
+      const scan = db.getLatestScan(d.id);
+      const results = scan?.results ? JSON.parse(scan.results) : {};
+      csv += `${d.name},${d.provider || 'Manual'},${d.last_score || ''},${d.last_scan || ''},${d.verified ? 'Yes' : 'No'},${results.spf?.status || 'N/A'},${results.dkim?.status || 'N/A'},${results.dmarc?.status || 'N/A'}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=nexusemail-domains.csv');
+    res.send(csv);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Export all domains as JSON
+router.get('/export/json', (req, res) => {
+  try {
+    const domains = db.getDomains();
+    res.json(domains);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+function generateReportHtml(domain, scans, issues) {
+  const latestScan = scans[0];
+  const results = latestScan?.results ? JSON.parse(latestScan.results) : {};
+  
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <title>NexusEmail Report - ${domain.name}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+    .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 30px; border-radius: 12px; margin-bottom: 20px; }
+    .score { font-size: 48px; font-weight: bold; }
+    .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .issues { display: flex; gap: 20px; margin-top: 10px; }
+    .issue { padding: 8px 16px; border-radius: 4px; }
+    .issue.high { background: #fee2e2; color: #dc2626; }
+    .issue.medium { background: #fef3c7; color: #d97706; }
+    .issue.low { background: #dbeafe; color: #2563eb; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; }
+    .pass { color: #16a34a; }
+    .fail { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔒 NexusEmail Security Report</h1>
+    <p>Domain: <strong>${domain.name}</strong></p>
+    <p>Generated: ${new Date().toLocaleString()}</p>
+    <div class="score">${domain.last_score || 'N/A'}</div>
+  </div>
+  
+  <div class="card">
+    <h3>Security Score</h3>
+    <div class="issues">
+      <div class="issue high">🔴 ${issues.high} High</div>
+      <div class="issue medium">🟡 ${issues.medium} Medium</div>
+      <div class="issue low">🔵 ${issues.low} Low</div>
+    </div>
+  </div>
+  
+  <div class="card">
+    <h3>DNS Records</h3>
+    <table>
+      <tr><th>Record</th><th>Status</th><th>Details</th></tr>
+      <tr><td>SPF</td><td class="${results.spf?.status === 'pass' ? 'pass' : 'fail'}">${results.spf?.status || 'Not checked'}</td><td>${results.spf?.record || 'No record'}</td></tr>
+      <tr><td>DKIM</td><td class="${results.dkim?.status === 'pass' ? 'pass' : 'fail'}">${results.dkim?.status || 'Not checked'}</td><td>${results.dkim?.selector || 'No record'}</td></tr>
+      <tr><td>DMARC</td><td class="${results.dmarc?.status === 'pass' ? 'pass' : 'fail'}">${results.dmarc?.status || 'Not checked'}</td><td>${results.dmarc?.policy || 'No policy'}</td></tr>
+      <tr><td>MTA-STS</td><td class="${results.mta_sts?.status === 'pass' ? 'pass' : 'fail'}">${results.mta_sts?.status || 'Not checked'}</td><td>${results.mta_sts?.mode || 'N/A'}</td></tr>
+      <tr><td>TLS-RPT</td><td class="${results.tls_rpt?.status === 'pass' ? 'pass' : 'fail'}">${results.tls_rpt?.status || 'Not checked'}</td><td>${results.tls_rpt?.reportUri || 'No reporting'}</td></tr>
+    </table>
+  </div>
+  
+  <div class="card">
+    <h3>Issues Found</h3>
+    ${latestScan?.issues ? JSON.parse(latestScan.issues).map(i => `<p><strong>${i.type}:</strong> ${i.message}</p>`).join('') : '<p>No issues found</p>'}
+  </div>
+  
+  <p style="color: #6b7280; font-size: 12px;">Generated by NexusEmail - Email Security Auditing Platform</p>
+</body>
+</html>`;
+}
+
+module.exports = router;

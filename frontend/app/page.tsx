@@ -47,6 +47,8 @@ export default function Dashboard() {
   const [brandScanning, setBrandScanning] = useState(false);
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
+  const [reportDomainId, setReportDomainId] = useState<number | null>(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
   
   // Brand Protection Advanced
   const [monitoredBrands, setMonitoredBrands] = useState<any[]>([]);
@@ -454,6 +456,57 @@ export default function Dashboard() {
     }
   };
 
+  const generateReport = async (domainId: number) => {
+    setGeneratingReport(true);
+    try {
+      const response = await fetch(`${API_BASE}/reports/domains/${domainId}/report`);
+      const html = await response.text();
+      
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report-${domainId}-${Date.now()}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to generate report: ' + e.message);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const exportCSV = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/reports/export/csv`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nexusemail-domains.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to export CSV: ' + e.message);
+    }
+  };
+
+  const exportJSON = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/reports/export/json`);
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nexusemail-domains.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Failed to export JSON: ' + e.message);
+    }
+  };
+
   const dnsProviders = [
     { name: 'Cloudflare', icon: Server, connected: false },
     { name: 'AWS Route53', icon: Server, connected: false },
@@ -834,30 +887,45 @@ export default function Dashboard() {
               <Card className="border-border/40">
                 <CardHeader>
                   <CardTitle>SMTP Configuration</CardTitle>
-                  <CardDescription>Configure email notifications</CardDescription>
+                  <CardDescription>Configure email delivery for notifications</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium">SMTP Host</label>
-                      <Input placeholder="smtp.example.com" className="mt-1" />
+                      <Input value={smtpForm.host} onChange={(e) => setSmtpForm({...smtpForm, host: e.target.value})} placeholder="smtp.example.com" className="mt-1" />
                     </div>
                     <div>
                       <label className="text-sm font-medium">Port</label>
-                      <Input placeholder="587" className="mt-1" />
+                      <Input value={smtpForm.port} onChange={(e) => setSmtpForm({...smtpForm, port: e.target.value})} placeholder="587" className="mt-1" />
                     </div>
                     <div>
                       <label className="text-sm font-medium">Username</label>
-                      <Input placeholder="user@example.com" className="mt-1" />
+                      <Input value={smtpForm.user} onChange={(e) => setSmtpForm({...smtpForm, user: e.target.value})} placeholder="user@example.com" className="mt-1" />
                     </div>
                     <div>
                       <label className="text-sm font-medium">Password</label>
-                      <Input type="password" placeholder="••••••••" className="mt-1" />
+                      <Input type="password" value={smtpForm.pass} onChange={(e) => setSmtpForm({...smtpForm, pass: e.target.value})} placeholder="••••••••" className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">From Email</label>
+                      <Input value={smtpForm.from} onChange={(e) => setSmtpForm({...smtpForm, from: e.target.value})} placeholder="noreply@yourdomain.com" className="mt-1" />
+                    </div>
+                    <div className="flex items-center">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" checked={smtpForm.secure} onChange={(e) => setSmtpForm({...smtpForm, secure: e.target.checked})} className="rounded" />
+                        Use TLS/SSL
+                      </label>
                     </div>
                   </div>
-                  <Button>
-                    <Save className="w-4 h-4 mr-2" /> Save SMTP Settings
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={saveSmtp}>
+                      <Save className="w-4 h-4 mr-2" /> Save SMTP
+                    </Button>
+                    <Button variant="outline" onClick={testSmtp} disabled={testingSmtp}>
+                      {testingSmtp ? 'Testing...' : 'Test'}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -876,7 +944,13 @@ export default function Dashboard() {
                         <p className="font-medium">{pref.label}</p>
                         <p className="text-sm text-muted-foreground">{pref.desc}</p>
                       </div>
-                      <Button variant="outline" size="sm">Enabled</Button>
+                      <Button 
+                        variant={notifications[pref.key] ? "default" : "outline"} 
+                        size="sm" 
+                        onClick={() => saveNotifications(pref.key, !notifications[pref.key])}
+                      >
+                        {notifications[pref.key] ? 'On' : 'Off'}
+                      </Button>
                     </div>
                   ))}
                 </CardContent>
@@ -886,9 +960,14 @@ export default function Dashboard() {
             <TabsContent value="reports" className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Generate Reports</h2>
-                <Button variant="outline">
-                  <Download className="w-4 h-4 mr-2" /> Export CSV
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={exportCSV}>
+                    <Download className="w-4 h-4 mr-2" /> Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={exportJSON}>
+                    <Download className="w-4 h-4 mr-2" /> Export JSON
+                  </Button>
+                </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -898,7 +977,25 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">Generate detailed HTML report for a specific domain</p>
-                    <Button className="w-full">Generate Report</Button>
+                    <div className="space-y-2">
+                      <select 
+                        className="w-full p-2 rounded border bg-background"
+                        value={reportDomainId || ''}
+                        onChange={(e) => setReportDomainId(Number(e.target.value))}
+                      >
+                        <option value="">Select domain...</option>
+                        {domains.map((d: any) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                      <Button 
+                        className="w-full" 
+                        onClick={() => reportDomainId && generateReport(reportDomainId)}
+                        disabled={!reportDomainId || generatingReport}
+                      >
+                        {generatingReport ? 'Generating...' : 'Generate Report'}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -907,8 +1004,15 @@ export default function Dashboard() {
                     <CardTitle>Bulk Export</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">Export all domain data as CSV</p>
-                    <Button variant="outline" className="w-full">Export All</Button>
+                    <p className="text-sm text-muted-foreground mb-4">Export all domain data as CSV or JSON</p>
+                    <div className="space-y-2">
+                      <Button variant="outline" className="w-full" onClick={exportCSV}>
+                        <Download className="w-4 h-4 mr-2" /> Download CSV
+                      </Button>
+                      <Button variant="outline" className="w-full" onClick={exportJSON}>
+                        <Download className="w-4 h-4 mr-2" /> Download JSON
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
