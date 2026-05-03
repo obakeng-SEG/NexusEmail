@@ -34,6 +34,10 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("domains");
   const [brands, setBrands] = useState([]);
   const [showAddBrand, setShowAddBrand] = useState(false);
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [verifyDomain, setVerifyDomain] = useState<any>(null);
+  const [verifyToken, setVerifyToken] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const [newBrandDomain, setNewBrandDomain] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
   const [brandScanResult, setBrandScanResult] = useState<any>(null);
@@ -330,6 +334,43 @@ export default function Dashboard() {
       setShowDetails(true);
     } catch (e) {
       alert('Failed to analyze domain: ' + e.message);
+    }
+  };
+
+  const openVerifyModal = async (domain: any) => {
+    try {
+      const res = await fetch(`${API_BASE}/domains/${domain.id}/verify/generate`);
+      const data = await res.json();
+      setVerifyDomain(domain);
+      setVerifyToken(data.token);
+      setShowVerifyModal(true);
+    } catch (e) {
+      console.error('Failed to generate verification:', e);
+    }
+  };
+
+  const verifyDomainOwnership = async () => {
+    if (!verifyDomain) return;
+    setVerifying(true);
+    try {
+      const res = await fetch(`${API_BASE}/domains/${verifyDomain.id}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: verifyToken })
+      });
+      const data = await res.json();
+      
+      if (data.verified) {
+        alert('Domain verified successfully! Features unlocked.');
+        setShowVerifyModal(false);
+        loadDomains();
+      } else {
+        alert('Verification failed: ' + (data.reason || 'TXT record not found'));
+      }
+    } catch (e) {
+      alert('Verification failed: ' + e.message);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -644,7 +685,18 @@ export default function Dashboard() {
                               <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
                                 <Globe className="w-5 h-5" />
                               </div>
-                              <span className="font-medium">{domain.name}</span>
+                              <div>
+                                <span className="font-medium">{domain.name}</span>
+                                {domain.verified ? (
+                                  <div className="flex items-center gap-1 text-xs text-emerald-500">
+                                    <CheckCircle className="w-3 h-3" /> Verified
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="ghost" className="text-xs text-amber-500 h-auto p-0" onClick={() => openVerifyModal(domain)}>
+                                    <AlertTriangle className="w-3 h-3 mr-1" /> Verify
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="p-4 text-muted-foreground">{domain.provider || 'Manual'}</td>
@@ -1329,6 +1381,53 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {showVerifyModal && verifyDomain && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowVerifyModal(false)}>
+            <div className="bg-background border rounded-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold">Verify Domain Ownership</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowVerifyModal(false)}>
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+              
+              <p className="text-sm text-muted-foreground mb-4">
+                To unlock email security features for <span className="font-medium">{verifyDomain.name}</span>, 
+                you must prove ownership by adding a DNS record.
+              </p>
+
+              <div className="space-y-4">
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="font-medium text-sm mb-2">TXT Record (Recommended)</p>
+                  <div className="text-xs space-y-1">
+                    <p><span className="text-muted-foreground">Name:</span> <code className="bg-background px-1">_nexusemail-verification</code></p>
+                    <p><span className="text-muted-foreground">Value:</span> <code className="bg-background px-1">_nexusemail-verification={verifyToken}</code></p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="font-medium text-sm mb-2">CNAME Alternative</p>
+                  <div className="text-xs space-y-1">
+                    <p><span className="text-muted-foreground">Name:</span> <code className="bg-background px-1">verify.{verifyDomain.name}</code></p>
+                    <p><span className="text-muted-foreground">Points to:</span> <code className="bg-background px-1">{verifyToken}.verification.nexusemail.local</code></p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  After adding the record, click Verify below. DNS changes may take a few minutes to propagate.
+                </p>
+
+                <div className="flex gap-2">
+                  <Button onClick={verifyDomainOwnership} disabled={verifying}>
+                    {verifying ? 'Verifying...' : 'Verify Now'}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setShowVerifyModal(false)}>Cancel</Button>
+                </div>
+              </div>
             </div>
           </div>
         )}
