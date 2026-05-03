@@ -1,36 +1,66 @@
 // Cloudflare DNS Provider
+const { Cloudflare } = require('cloudflare');
+
 class CloudflareProvider {
   constructor(config) {
-    this.apiToken = config.apiToken;
-    this.zoneId = config.zoneId;
-    this.baseUrl = 'https://api.cloudflare.com/client/v4';
+    this.cf = new Cloudflare({ token: config.apiToken });
+    this.email = config.email;
   }
 
-  async createTXTRecord(name, content) {
-    // In production, this would make actual API calls to Cloudflare
-    console.log(`[Cloudflare] Creating TXT record: ${name}`);
-    console.log(`[Cloudflare] Content: ${content}`);
-    
-    // Simulated response
-    return {
-      success: true,
-      provider: 'cloudflare',
-      record: { name, type: 'TXT', content }
-    };
+  async getZoneId(domain) {
+    try {
+      const zones = await this.cf.zones.browse({ name: domain });
+      return zones.result?.[0]?.id || null;
+    } catch (e) {
+      console.error('[Cloudflare] Failed to get zone:', e.message);
+      return null;
+    }
   }
 
-  async deleteTXTRecord(name) {
-    console.log(`[Cloudflare] Deleting TXT record: ${name}`);
-    return { success: true, provider: 'cloudflare' };
+  async createTXTRecord(name, content, domain) {
+    try {
+      const zoneId = await this.getZoneId(domain);
+      if (!zoneId) return { success: false, error: 'Zone not found' };
+
+      const result = await this.cf.dnsRecords.create(zoneId, {
+        type: 'TXT',
+        name: name,
+        content: content,
+        ttl: 3600
+      });
+
+      return { success: true, provider: 'cloudflare', record: result.result };
+    } catch (e) {
+      console.error('[Cloudflare] Create failed:', e.message);
+      return { success: false, error: e.message };
+    }
   }
 
-  async updateTXTRecord(name, content) {
-    return await this.createTXTRecord(name, content);
+  async deleteTXTRecord(name, domain) {
+    try {
+      const zoneId = await this.getZoneId(domain);
+      if (!zoneId) return { success: false, error: 'Zone not found' };
+
+      const records = await this.cf.dnsRecords.read({ zone_id: zoneId, name: name, type: 'TXT' });
+      if (records.result?.[0]) {
+        await this.cf.dnsRecords.delete(zoneId, records.result[0].id);
+      }
+      return { success: true, provider: 'cloudflare' };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   }
 
-  async listRecords() {
-    console.log(`[Cloudflare] Listing DNS records`);
-    return { success: true, records: [] };
+  async listRecords(domain) {
+    try {
+      const zoneId = await this.getZoneId(domain);
+      if (!zoneId) return { success: false, error: 'Zone not found' };
+
+      const records = await this.cf.dnsRecords.browse({ zone_id: zoneId });
+      return { success: true, records: records.result || [] };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   }
 }
 

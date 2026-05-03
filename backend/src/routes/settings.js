@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/database');
 const { NotificationService } = require('../services/notifications');
+const { getProvider } = require('../services/providers');
 
 const notificationService = new NotificationService();
 
@@ -72,6 +73,27 @@ router.delete('/providers/credentials/:provider', (req, res) => {
   db.setSetting('provider_credentials', JSON.stringify(allCredentials));
   
   res.json({ success: true });
+});
+
+// Test provider connection
+router.post('/providers/test', async (req, res) => {
+  const { provider, credentials } = req.body;
+  
+  if (!provider || !credentials) {
+    return res.status(400).json({ error: 'Provider and credentials required' });
+  }
+
+  try {
+    const dnsProvider = getProvider(provider, credentials);
+    if (!dnsProvider) {
+      return res.json({ success: false, error: 'Unknown provider' });
+    }
+
+    const result = await dnsProvider.testConnection();
+    res.json(result);
+  } catch (e) {
+    res.json({ success: false, error: e.message });
+  }
 });
 
 // Get provider credentials (for internal use)

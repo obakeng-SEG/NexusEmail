@@ -552,6 +552,29 @@ export default function Dashboard() {
     }
   };
 
+  const testProviderConnection = async (provider: any) => {
+    const creds = settings?.provider_credentials?.[provider.name.toLowerCase()];
+    if (!creds) {
+      alert('Please configure credentials first');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/settings/providers/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: provider.name, credentials: creds })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ ${provider.name} connection successful! (${data.latency}ms)`);
+      } else {
+        alert(`❌ ${provider.name} failed: ${data.error}`);
+      }
+    } catch (e) {
+      alert('Test failed: ' + e.message);
+    }
+  };
+
   const getProviderFields = (providerName: string) => {
     const fields: Record<string, string[]> = {
       'Cloudflare': ['api_key', 'email'],
@@ -944,14 +967,24 @@ export default function Dashboard() {
                           </div>
                         </div>
                         {isConnected ? (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="w-full text-xs"
-                            onClick={() => disconnectProvider(provider.name)}
-                          >
-                            Disconnect
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="flex-1 text-xs"
+                              onClick={() => testProviderConnection(provider)}
+                            >
+                              Test
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-xs text-red-500"
+                              onClick={() => disconnectProvider(provider.name)}
+                            >
+                              ×
+                            </Button>
+                          </div>
                         ) : (
                           <Button 
                             size="sm" 
