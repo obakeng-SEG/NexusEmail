@@ -32,6 +32,9 @@ export default function Dashboard() {
   const [notifications, setNotifications] = useState({});
   const [activeTab, setActiveTab] = useState("domains");
   const [brands, setBrands] = useState([]);
+  const [showAddBrand, setShowAddBrand] = useState(false);
+  const [newBrandDomain, setNewBrandDomain] = useState('');
+  const [newBrandName, setNewBrandName] = useState('');
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
 
   // Load data on mount
@@ -720,21 +723,68 @@ export default function Dashboard() {
                     <CardTitle>Brand Protection</CardTitle>
                     <CardDescription>Monitor your brand against typosquatting and impersonation</CardDescription>
                   </div>
-                  <Button onClick={() => {
-                    const name = prompt("Enter brand/domain to monitor:");
-                    if (name) {
-                      fetch(`${API_BASE}/brands`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ domain: name, brand_name: name.split('.')[0] })
-                      }).then(() => loadBrands());
-                    }
-                  }}>
+                  <Button onClick={() => setShowAddBrand(true)}>
                     <Plus className="w-4 h-4 mr-2" /> Add Brand
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {brands.length === 0 ? (
+                  {showAddBrand && (
+                    <div className="mb-6 p-4 bg-muted/30 rounded-lg border">
+                      <p className="font-medium mb-3">Add Brand to Monitor</p>
+                      <div className="grid gap-3">
+                        <div>
+                          <label className="text-sm text-muted-foreground">Domain</label>
+                          <Input 
+                            placeholder="example.com" 
+                            value={newBrandDomain}
+                            onChange={(e) => setNewBrandDomain(e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm text-muted-foreground">Brand Name (optional)</label>
+                          <Input 
+                            placeholder="My Company" 
+                            value={newBrandName}
+                            onChange={(e) => setNewBrandName(e.target.value)}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            onClick={() => {
+                              if (!newBrandDomain.trim()) return;
+                              fetch(`${API_BASE}/brands`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ 
+                                  domain: newBrandDomain.toLowerCase().trim(), 
+                                  brand_name: newBrandName || newBrandDomain.split('.')[0] 
+                                })
+                              }).then(() => {
+                                loadBrands();
+                                setNewBrandDomain('');
+                                setNewBrandName('');
+                                setShowAddBrand(false);
+                              });
+                            }}
+                          >
+                            <Save className="w-4 h-4 mr-1" /> Save
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            setShowAddBrand(false);
+                            setNewBrandDomain('');
+                            setNewBrandName('');
+                          }}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {brands.length === 0 && !showAddBrand ? (
                     <div className="text-center py-10 text-muted-foreground">
                       <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
                       <p>No brands being monitored</p>
@@ -755,7 +805,7 @@ export default function Dashboard() {
                             <Button variant="outline" size="sm" onClick={async () => {
                               try {
                                 await fetch(`${API_BASE}/brands/check/${brand.id}`, { method: 'POST' });
-                                alert('Brand check initiated');
+                                alert('Brand check initiated - results will appear in console');
                               } catch (e) { alert('Check failed'); }
                             }}>
                               <Search className="w-4 h-4 mr-1" /> Scan
