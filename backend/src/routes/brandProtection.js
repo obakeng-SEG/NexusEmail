@@ -5,6 +5,21 @@ const db = require('../db/database');
 
 const brandService = new BrandProtectionService();
 
+// Brand protection settings
+router.get('/settings', (req, res) => {
+  res.json({
+    reply_to: db.getSetting('brand_protection_reply_to') || 'legal@yourcompany.com'
+  });
+});
+
+router.put('/settings', (req, res) => {
+  const { reply_to } = req.body;
+  if (reply_to) {
+    db.setSetting('brand_protection_reply_to', reply_to);
+  }
+  res.json({ success: true });
+});
+
 router.get('/', (req, res) => {
   const brands = db.getSetting('monitored_brands') || '[]';
   res.json(JSON.parse(brands));
@@ -230,19 +245,23 @@ router.post('/:id/takedown', async (req, res) => {
       
       // Load SMTP config from database
       const smtpConfig = JSON.parse(db.getSetting('smtp_config') || '{}');
+      const replyTo = db.getSetting('brand_protection_reply_to') || 'support@nexusemail.local';
+      
       if (smtpConfig.host && smtpConfig.host.trim()) {
         notifService.configureSMTP(smtpConfig);
         
         const emailResult = await notifService.sendNotification(
           registrar.abuse_email,
           `[Brand Abuse Report] ${domain} - ${threat_type || 'Impersonation'}`,
-          takedown.email_template
+          takedown.email_template,
+          { replyTo }
         );
         
         if (emailResult.success) {
           takedown.sent = true;
           takedown.status = 'sent';
           takedown.sent_at = new Date().toISOString();
+          takedown.reply_to = replyTo;
         }
       }
     } catch (e) {
@@ -265,6 +284,46 @@ router.get('/:id/takedowns', (req, res) => {
   }
   
   res.json(brand.takedowns || []);
+});
+
+// Add reply to takedown
+router.post('/:id/takedown/:takedownId/reply', (req, res) => {
+  const { from, subject, body, direction } = req.body;
+  const brands = JSON.parse(db.getSetting('monitored_brands') || '[]');
+  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
+  
+  if (brandIndex === -1) {
+    return res.status(404).json({ error: 'Brand not found' });
+  }
+  
+  if (brands[brandIndex].takedowns) {
+    const takedownIndex = brands[brandIndex].takedowns.findIndex((t) => t.id === parseInt(req.params.takedownId));
+    if (takedownIndex !== -1) {
+      const reply = {
+        id: Date.now(),
+        from,
+        subject: subject || '',
+        body,
+        direction: direction || 'incoming',
+        timestamp: new Date().toISOString()
+      };
+      
+      if (!brands[brandIndex].takedowns[takedownIndex].replies) {
+        brands[brandIndex].takedowns[takedownIndex].replies = [];
+      }
+      brands[brandIndex].takedowns[takedownIndex].replies.push(reply);
+      
+      // Update status if first incoming reply
+      if (direction === 'incoming' && brands[brandIndex].takedowns[takedownIndex].status === 'sent') {
+        brands[brandIndex].takedowns[takedownIndex].status = 'waiting_response';
+      }
+      
+      db.setSetting('monitored_brands', JSON.stringify(brands));
+      return res.json({ success: true, reply });
+    }
+  }
+  
+  res.status(404).json({ error: 'Takedown not found' });
 });
 
 router.patch('/:id/takedown/:takedownId', (req, res) => {
