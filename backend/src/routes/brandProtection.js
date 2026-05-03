@@ -238,6 +238,8 @@ router.post('/:id/takedown', async (req, res) => {
   };
 
   // Try to send email via SMTP
+  const senderEmail = contact_email || 'legal@yourcompany.com';
+  
   if (registrar.abuse_email) {
     try {
       const NotificationService = require('../services/notifications');
@@ -245,23 +247,26 @@ router.post('/:id/takedown', async (req, res) => {
       
       // Load SMTP config from database
       const smtpConfig = JSON.parse(db.getSetting('smtp_config') || '{}');
-      const replyTo = db.getSetting('brand_protection_reply_to') || 'support@nexusemail.local';
       
       if (smtpConfig.host && smtpConfig.host.trim()) {
         notifService.configureSMTP(smtpConfig);
         
+        // Send TO registrar, BCC to sender (copy)
         const emailResult = await notifService.sendNotification(
           registrar.abuse_email,
           `[Brand Abuse Report] ${domain} - ${threat_type || 'Impersonation'}`,
           takedown.email_template,
-          { replyTo }
+          { 
+            replyTo: senderEmail,
+            cc: senderEmail  // Send copy to sender
+          }
         );
         
         if (emailResult.success) {
           takedown.sent = true;
           takedown.status = 'sent';
           takedown.sent_at = new Date().toISOString();
-          takedown.reply_to = replyTo;
+          takedown.sender_email = senderEmail;
         }
       }
     } catch (e) {
