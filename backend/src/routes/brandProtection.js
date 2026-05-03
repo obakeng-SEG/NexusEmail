@@ -83,7 +83,7 @@ router.post('/:id/safe', (req, res) => {
   
   // Remove from threats if present
   if (brands[brandIndex].threats) {
-    brands[brandIndex].threats = brands[brandIndex].threats.filter((t: any) => t.domain !== domain);
+    brands[brandIndex].threats = brands[brandIndex].threats.filter((t) => t.domain !== domain);
   }
   
   db.setSetting('monitored_brands', JSON.stringify(brands));
@@ -101,7 +101,7 @@ router.delete('/:id/safe', (req, res) => {
   }
   
   if (brands[brandIndex].safe_list) {
-    brands[brandIndex].safe_list = brands[brandIndex].safe_list.filter((d: string) => d !== domain);
+    brands[brandIndex].safe_list = brands[brandIndex].safe_list.filter((d) => d !== domain);
   }
   
   db.setSetting('monitored_brands', JSON.stringify(brands));
@@ -163,7 +163,7 @@ router.patch('/:id/takedown/:takedownId', (req, res) => {
   }
   
   if (brands[brandIndex].takedowns) {
-    const takedownIndex = brands[brandIndex].takedowns.findIndex((t: any) => t.id === parseInt(req.params.takedownId));
+    const takedownIndex = brands[brandIndex].takedowns.findIndex((t) => t.id === parseInt(req.params.takedownId));
     if (takedownIndex !== -1) {
       if (status) brands[brandIndex].takedowns[takedownIndex].status = status;
       if (notes) brands[brandIndex].takedowns[takedownIndex].notes = notes;

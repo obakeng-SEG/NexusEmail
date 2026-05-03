@@ -322,16 +322,30 @@ class BrandProtectionService {
   async checkSubdomainAbuse(mainDomain) {
     const records = [];
     const mainParts = mainDomain.split('.');
-    const base = mainParts.slice(-2).join('.');
+    const base = mainParts.slice(-2).join('.'); // e.g., co.za
+    const baseName = mainParts[0]; // e.g., segbytes
 
-    const suspiciousSubdomains = ['phishing', 'fake', 'secure', 'login', 'verify', 'account', 'update'];
-
+    // Check 1: Suspicious subdomains ON the brand domain itself
+    const suspiciousSubdomains = ['phishing', 'fake', 'secure', 'login', 'verify', 'account', 'update', 'mail', 'smtp', 'webmail'];
+    
     for (const sub of suspiciousSubdomains) {
-      const domain = `${sub}.${base}`;
+      const domain = `${sub}.${mainDomain}`; // e.g., phishing.segbytes.co.za
       try {
         const ips = await dns.resolve(domain);
-        records.push({ domain, type: 'suspicious_subdomain', ips, status: 'active' });
+        records.push({ domain, type: 'abused_subdomain', ips, status: 'active', subdomain: sub });
       } catch (e) {}
+    }
+
+    // Check 2: Lookalikes with brand name in subdomain
+    const lookalikePrefixes = ['segbytes', 'segbyte', 'seg-byte', 'segbytez', 'segbyts'];
+    for (const prefix of lookalikePrefixes) {
+      const domain = `${prefix}.${base}`; // e.g., segbytes.co.za variants
+      if (domain !== mainDomain) {
+        try {
+          const ips = await dns.resolve(domain);
+          records.push({ domain, type: 'brand_subdomain', ips, status: 'exists', note: 'Possible brand in subdomain' });
+        } catch (e) {}
+      }
     }
 
     return { records, found: records.length };
