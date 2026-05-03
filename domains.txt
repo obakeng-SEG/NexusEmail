@@ -1,0 +1,4 @@
+example.com
+google.com
+microsoft.com
+github.com

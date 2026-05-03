@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3001
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev
+
+  # Backend (Express API)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./backend/data:/app/data
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DB_PATH=/app/data/nexusemail.db
+    command: npm run dev
+
+networks:
+  default:
+    name: nexusemail-network
