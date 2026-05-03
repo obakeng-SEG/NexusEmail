@@ -8,9 +8,10 @@ const domainRoutes = require('./routes/domains');
 const scanRoutes = require('./routes/scans');
 const integrationRoutes = require('./routes/integrations');
 const { router: settingsRoutes } = require('./routes/settings');
+const brandProtectionRoutes = require('./routes/brandProtection');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4000;
 
 // Security middleware
 app.use(helmet());
@@ -34,6 +35,7 @@ app.use('/api/domains', domainRoutes);
 app.use('/api/scans', scanRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/brands', brandProtectionRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
