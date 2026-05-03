@@ -1,119 +1,133 @@
-const Database = require('better-sqlite3');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
-let db;
-
-function initDatabase() {
-  const dataDir = path.join(__dirname, '../../data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  
-  const dbPath = process.env.DB_PATH || path.join(dataDir, 'nexusemail.db');
-  db = new Database(dbPath);
-  
-  // Enable foreign keys
-  db.pragma('foreign_keys = ON');
-  
-  // Create tables
-  db.exec(`
-    -- Domains table
-    CREATE TABLE IF NOT EXISTS domains (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
-      provider TEXT DEFAULT 'manual',
-      provider_config TEXT,
-      auto_fix INTEGER DEFAULT 0,
-      notify_email TEXT,
-      status TEXT DEFAULT 'active',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    -- Scans table
-    CREATE TABLE IF NOT EXISTS scans (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      domain_id INTEGER NOT NULL,
-      score INTEGER,
-      spf_status TEXT,
-      dkim_status TEXT,
-      dmarc_status TEXT,
-      spf_record TEXT,
-      dkim_selectors TEXT,
-      dmarc_record TEXT,
-      issues TEXT,
-      scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
-    );
-
-    -- Integrations table
-    CREATE TABLE IF NOT EXISTS integrations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      provider TEXT NOT NULL,
-      name TEXT,
-      config TEXT,
-      status TEXT DEFAULT 'inactive',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    -- Settings table
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    );
-
-    -- Reports table
-    CREATE TABLE IF NOT EXISTS reports (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      domain_id INTEGER,
-      type TEXT,
-      filename TEXT,
-      generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE
-    );
-
-    -- Notifications log table
-    CREATE TABLE IF NOT EXISTS notification_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      domain_id INTEGER,
-      type TEXT,
-      recipient TEXT,
-      status TEXT,
-      message_id TEXT,
-      sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE SET NULL
-    );
-
-    -- Create indexes
-    CREATE INDEX IF NOT EXISTS idx_scans_domain ON scans(domain_id);
-    CREATE INDEX IF NOT EXISTS idx_scans_date ON scans(scanned_at);
-    CREATE INDEX IF NOT EXISTS idx_domains_name ON domains(name);
-  `);
-
-  // Insert default settings
-  const defaultSettings = [
-    ['notify_scan_completed', '1'],
-    ['notify_critical_alerts', '1'],
-    ['notify_weekly_report', '0'],
-    ['scan_schedule', 'daily'],
-    ['auto_remediation', '0']
-  ];
-  
-  const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-  for (const [key, value] of defaultSettings) {
-    insertSetting.run(key, value);
-  }
-
-  console.log('✅ Database initialized with full schema');
-  return db;
+const dataDir = path.join(__dirname, '../../data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
 }
 
-function getDatabase() {
-  if (!db) {
-    initDatabase();
+const dbFile = path.join(dataDir, 'nexusemail.json');
+
+let db = {
+  domains: [],
+  scans: [],
+  integrations: [],
+  settings: {},
+  reports: []
+};
+
+// Load existing data
+function loadDB() {
+  try {
+    if (fs.existsSync(dbFile)) {
+      db = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+    }
+  } catch (e) {
+    console.log('Starting fresh database');
   }
-  return db;
 }
 
-module.exports = { initDatabase, getDatabase };
+// Save data
+function saveDB() {
+  fs.writeFileSync(dbFile, JSON.stringify(db, null, 2));
+}
+
+// Domain operations
+function getDomains() { return db.domains; }
+function addDomain(domain) {
+  domain.id = Date.now();
+  domain.created_at = new Date().toISOString();
+  domain.updated_at = new Date().toISOString();
+  db.domains.push(domain);
+  saveDB();
+  return domain;
+}
+function getDomain(id) { return db.domains.find(d => d.id === id); }
+function updateDomain(id, updates) {
+  const idx = db.domains.findIndex(d => d.id === id);
+  if (idx !== -1) {
+    db.domains[idx] = { ...db.domains[idx], ...updates, updated_at: new Date().toISOString() };
+    saveDB();
+  }
+}
+function deleteDomain(id) {
+  db.domains = db.domains.filter(d => d.id !== id);
+  db.scans = db.scans.filter(s => s.domain_id !== id);
+  saveDB();
+}
+
+// Scan operations
+function addScan(scan) {
+  scan.id = Date.now();
+  scan.scanned_at = new Date().toISOString();
+  db.scans.push(scan);
+  saveDB();
+  return scan;
+}
+function getScans(domainId, limit = 30) {
+  return db.scans.filter(s => s.domain_id === domainId).slice(-limit);
+}
+function getLatestScan(domainId) {
+  const scans = db.scans.filter(s => s.domain_id === domainId).sort((a,b) => new Date(b.scanned_at) - new Date(a.scanned_at));
+  return scans[0];
+}
+
+// Integration operations
+function getIntegrations() { return db.integrations; }
+function addIntegration(integration) {
+  integration.id = Date.now();
+  integration.created_at = new Date().toISOString();
+  db.integrations.push(integration);
+  saveDB();
+  return integration;
+}
+function deleteIntegration(id) {
+  db.integrations = db.integrations.filter(i => i.id !== id);
+  saveDB();
+}
+
+// Settings
+function getSetting(key) { return db.settings[key]; }
+function setSetting(key, value) {
+  db.settings[key] = value;
+  saveDB();
+}
+
+// Reports
+function addReport(report) {
+  report.id = Date.now();
+  report.generated_at = new Date().toISOString();
+  db.reports.push(report);
+  saveDB();
+  return report;
+}
+function getReports(domainId) {
+  if (domainId) return db.reports.filter(r => r.domain_id === domainId);
+  return db.reports;
+}
+
+// Initialize
+loadDB();
+
+// Set defaults
+if (!db.settings.notify_scan_completed) setSetting('notify_scan_completed', '1');
+if (!db.settings.notify_critical_alerts) setSetting('notify_critical_alerts', '1');
+if (!db.settings.notify_weekly_report) setSetting('notify_weekly_report', '0');
+
+module.exports = {
+  getDomains,
+  addDomain,
+  getDomain,
+  updateDomain,
+  deleteDomain,
+  addScan,
+  getScans,
+  getLatestScan,
+  getIntegrations,
+  addIntegration,
+  deleteIntegration,
+  getSetting,
+  setSetting,
+  addReport,
+  getReports
+};

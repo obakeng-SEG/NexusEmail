@@ -3,13 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const cron = require('node-cron');
 
 const domainRoutes = require('./routes/domains');
 const scanRoutes = require('./routes/scans');
 const integrationRoutes = require('./routes/integrations');
-const { initDatabase } = require('./db/database');
-const { startScheduledScans } = require('./services/scheduler');
+const settingsRoutes = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,20 +28,18 @@ app.use(limiter);
 app.use('/api/domains', domainRoutes);
 app.use('/api/scans', scanRoutes);
 app.use('/api/integrations', integrationRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const db = require('./db/database');
+  const domains = db.getDomains();
+  const integrations = db.getIntegrations();
+  res.json({ status: 'ok', domains: domains.length, integrations: integrations.length, timestamp: new Date().toISOString() });
 });
 
-// Initialize database
-initDatabase();
-
-// Start scheduled scans
-startScheduledScans();
-
 app.listen(PORT, () => {
-  console.log(`🚀 NexusEmail API running on port ${PORT}`);
+  console.log(`🚀 NexusEmail API running on http://localhost:${PORT}`);
 });
 
 module.exports = app;

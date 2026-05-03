@@ -7,7 +7,7 @@ class NotificationService {
   }
 
   // Configure SMTP
-  configure SMTP(config) {
+  configureSMTP(config) {
     this.transporter = nodemailer.createTransport({
       host: config.host,
       port: config.port,
