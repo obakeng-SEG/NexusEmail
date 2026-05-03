@@ -30,7 +30,10 @@ export default function Dashboard() {
   const [showDetails, setShowDetails] = useState(false);
   const [fixRecommendations, setFixRecommendations] = useState<any>(null);
   const [integrations, setIntegrations] = useState([]);
-  const [notifications, setNotifications] = useState({});
+  const [notifications, setNotifications] = useState<any>({});
+  const [settings, setSettings] = useState<any>(null);
+  const [smtpForm, setSmtpForm] = useState({ host: '', port: '587', secure: false, user: '', pass: '', from: '' });
+  const [testingSmtp, setTestingSmtp] = useState(false);
   const [activeTab, setActiveTab] = useState("domains");
   const [brands, setBrands] = useState([]);
   const [showAddBrand, setShowAddBrand] = useState(false);
@@ -196,11 +199,88 @@ export default function Dashboard() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/settings/notifications`);
+      const res = await fetch(`${API_BASE}/settings/config`);
       const data = await res.json();
-      setNotifications(data);
+      setSettings(data);
+      setNotifications(data.notifications || {});
+      if (data.smtp_config) {
+        setSmtpForm({
+          host: data.smtp_config.host || '',
+          port: String(data.smtp_config.port || 587),
+          secure: data.smtp_config.secure || false,
+          user: data.smtp_config.user || '',
+          pass: '',
+          from: data.smtp_config.from || ''
+        });
+      }
     } catch (e) {
       console.error('Failed to load settings:', e);
+    }
+  };
+
+  const saveNotifications = async (key: string, value: boolean) => {
+    try {
+      const current = { ...notifications, [key]: value };
+      await fetch(`${API_BASE}/settings/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(current)
+      });
+      setNotifications(current);
+    } catch (e) {
+      console.error('Failed to save notifications:', e);
+    }
+  };
+
+  const saveSmtp = async () => {
+    try {
+      await fetch(`${API_BASE}/settings/smtp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(smtpForm)
+      });
+      alert('SMTP settings saved!');
+    } catch (e) {
+      alert('Failed to save SMTP: ' + e.message);
+    }
+  };
+
+  const testSmtp = async () => {
+    setTestingSmtp(true);
+    try {
+      const res = await fetch(`${API_BASE}/settings/smtp/test`, { method: 'POST' });
+      const data = await res.json();
+      alert(data.success ? 'SMTP connection successful!' : 'SMTP failed: ' + data.error);
+    } catch (e) {
+      alert('SMTP test failed: ' + e.message);
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
+
+  const toggleSchedule = async (enabled: boolean) => {
+    try {
+      await fetch(`${API_BASE}/settings/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      setSettings({ ...settings, scan_schedule: { ...settings.scan_schedule, enabled } });
+    } catch (e) {
+      console.error('Failed to toggle schedule:', e);
+    }
+  };
+
+  const toggleAutoRemediation = async (enabled: boolean) => {
+    try {
+      await fetch(`${API_BASE}/settings/auto-remediation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      setSettings({ ...settings, auto_remediation: enabled });
+    } catch (e) {
+      console.error('Failed to toggle auto-remediation:', e);
     }
   };
 
@@ -845,14 +925,18 @@ export default function Dashboard() {
                       <p className="font-medium">Auto-scan on add</p>
                       <p className="text-sm text-muted-foreground">Automatically scan new domains</p>
                     </div>
-                    <Button variant="outline" size="sm">Enabled</Button>
+                    <Button variant={settings?.scan_schedule?.enabled ? "default" : "outline"} size="sm" onClick={() => toggleSchedule(!settings?.scan_schedule?.enabled)}>
+                      {settings?.scan_schedule?.enabled ? 'Enabled' : 'Disabled'}
+                    </Button>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Scheduled scans</p>
-                      <p className="text-sm text-muted-foreground">Daily at 2:00 AM</p>
+                      <p className="text-sm text-muted-foreground">Daily at 2:00 AM UTC</p>
                     </div>
-                    <Button variant="outline" size="sm">Daily</Button>
+                    <Button variant={settings?.scan_schedule?.enabled ? "default" : "outline"} size="sm" onClick={() => toggleSchedule(!settings?.scan_schedule?.enabled)}>
+                      {settings?.scan_schedule?.enabled ? 'Daily' : 'Off'}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -864,17 +948,111 @@ export default function Dashboard() {
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">Auto-create SPF</p>
-                      <p className="text-sm text-muted-foreground">Automatically fix missing SPF records</p>
+                      <p className="font-medium">Auto-fix issues</p>
+                      <p className="text-sm text-muted-foreground">Automatically apply recommended fixes</p>
                     </div>
-                    <Button variant="outline" size="sm">Disabled</Button>
+                    <Button variant={settings?.auto_remediation ? "default" : "outline"} size="sm" onClick={() => toggleAutoRemediation(!settings?.auto_remediation)}>
+                      {settings?.auto_remediation ? 'Enabled' : 'Disabled'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader>
+                  <CardTitle>Email Notifications</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Scan completed</p>
+                      <p className="text-sm text-muted-foreground">Notify when domain scan finishes</p>
+                    </div>
+                    <Button variant={notifications.notify_scan_completed ? "default" : "outline"} size="sm" onClick={() => saveNotifications('scan_completed', !notifications.notify_scan_completed)}>
+                      {notifications.notify_scan_completed ? 'On' : 'Off'}
+                    </Button>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">Auto-create DMARC</p>
-                      <p className="text-sm text-muted-foreground">Apply recommended DMARC policy</p>
+                      <p className="font-medium">Critical alerts</p>
+                      <p className="text-sm text-muted-foreground">Notify on critical security issues</p>
                     </div>
-                    <Button variant="outline" size="sm">Disabled</Button>
+                    <Button variant={notifications.notify_critical_alerts ? "default" : "outline"} size="sm" onClick={() => saveNotifications('critical_alerts', !notifications.notify_critical_alerts)}>
+                      {notifications.notify_critical_alerts ? 'On' : 'Off'}
+                    </Button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Weekly report</p>
+                      <p className="text-sm text-muted-foreground">Receive weekly security summary</p>
+                    </div>
+                    <Button variant={notifications.notify_weekly_report ? "default" : "outline"} size="sm" onClick={() => saveNotifications('weekly_report', !notifications.notify_weekly_report)}>
+                      {notifications.notify_weekly_report ? 'On' : 'Off'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader>
+                  <CardTitle>SMTP Configuration</CardTitle>
+                  <CardDescription>Configure email delivery for notifications</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">SMTP Host</label>
+                      <Input value={smtpForm.host} onChange={(e) => setSmtpForm({...smtpForm, host: e.target.value})} placeholder="smtp.example.com" className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Port</label>
+                      <Input value={smtpForm.port} onChange={(e) => setSmtpForm({...smtpForm, port: e.target.value})} placeholder="587" className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Username</label>
+                      <Input value={smtpForm.user} onChange={(e) => setSmtpForm({...smtpForm, user: e.target.value})} placeholder="user@example.com" className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Password</label>
+                      <Input type="password" value={smtpForm.pass} onChange={(e) => setSmtpForm({...smtpForm, pass: e.target.value})} placeholder="••••••••" className="mt-1" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium">From Email</label>
+                      <Input value={smtpForm.from} onChange={(e) => setSmtpForm({...smtpForm, from: e.target.value})} placeholder="noreply@yourdomain.com" className="mt-1" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" checked={smtpForm.secure} onChange={(e) => setSmtpForm({...smtpForm, secure: e.target.checked})} className="rounded" />
+                        Use TLS/SSL
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={saveSmtp}><Save className="w-4 h-4 mr-2" />Save SMTP</Button>
+                    <Button variant="outline" onClick={testSmtp} disabled={testingSmtp}>{testingSmtp ? 'Testing...' : 'Test Connection'}</Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/40">
+                <CardHeader>
+                  <CardTitle>DNS Providers</CardTitle>
+                  <CardDescription>Connected DNS providers for auto-remediation</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {dnsProviders.map((p: any) => {
+                      const creds = settings?.provider_credentials?.[p.name.toLowerCase()];
+                      return (
+                        <div key={p.name} className={`p-3 rounded-lg border ${creds ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-border'}`}>
+                          <div className="flex items-center gap-2">
+                            <Server className="w-4 h-4" />
+                            <span className="text-sm font-medium">{p.name}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{creds ? 'Connected' : 'Not connected'}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
