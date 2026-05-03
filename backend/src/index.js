@@ -15,8 +15,37 @@ const PORT = process.env.PORT || 4000;
 
 // Security middleware
 app.use(helmet());
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3002', 'http://localhost:3000'],
+  credentials: true
+}));
+
+// Input sanitization - basic XSS prevention
+const sanitizeInput = (req, res, next) => {
+  const sanitize = (obj) => {
+    if (typeof obj === 'string') {
+      return obj.replace(/[<>'"]/g, '');
+    }
+    if (Array.isArray(obj)) {
+      return obj.map(sanitize);
+    }
+    if (obj && typeof obj === 'object') {
+      const sanitized = {};
+      for (const [key, value] of Object.entries(obj)) {
+        sanitized[key] = sanitize(value);
+      }
+      return sanitized;
+    }
+    return obj;
+  };
+  
+  if (req.body) req.body = sanitize(req.body);
+  if (req.query) req.query = sanitize(req.query);
+  next();
+};
+
+app.use(sanitizeInput);
+app.use(express.json({ limit: '10kb' }));
 
 // Rate limiting
 const limiter = rateLimit({

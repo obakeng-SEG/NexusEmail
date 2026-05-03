@@ -14,8 +14,8 @@
     "express": "^4.21.0",
     "express-rate-limit": "^7.1.0",
     "helmet": "^7.1.0",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.8",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
     "sql.js": "^1.10.0"
   },
   "devDependencies": {
