@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 const domainRoutes = require('./routes/domains');
 const scanRoutes = require('./routes/scans');
 const integrationRoutes = require('./routes/integrations');
-const settingsRoutes = require('./routes/settings');
+const { router: settingsRoutes } = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +23,11 @@ const limiter = rateLimit({
   max: 100
 });
 app.use(limiter);
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({ name: 'NexusEmail API', status: 'running', version: '1.0.0' });
+});
 
 // Routes
 app.use('/api/domains', domainRoutes);
