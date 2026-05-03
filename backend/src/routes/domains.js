@@ -3,37 +3,155 @@ const router = express.Router();
 const db = require('../db/database');
 const { EmailSecurityAuditor } = require('../services/auditEngine');
 const { NotificationService } = require('../services/notifications');
+const { DomainVerificationService } = require('../services/domainVerification');
 
 const auditor = new EmailSecurityAuditor();
 const notificationService = new NotificationService();
+const verificationService = new DomainVerificationService();
 
 // Get all domains
 router.get('/', (req, res) => {
   const domains = db.getDomains();
   const result = domains.map(d => {
     const lastScan = db.getLatestScan(d.id);
-    return { ...d, last_score: lastScan?.score || null, last_scan: lastScan?.scanned_at || null };
+    return { 
+      ...d, 
+      last_score: lastScan?.score || null, 
+      last_scan: lastScan?.scanned_at || null,
+      verified: d.verified || false,
+      verified_at: d.verified_at || null,
+      verification_method: d.verification_method || null
+    };
   });
   res.json(result);
 });
 
-// Add new domain
+// Generate verification for domain (before adding)
+router.post('/verify/generate', (req, res) => {
+  const { domain } = req.body;
+  
+  if (!domain) {
+    return res.status(400).json({ error: 'Domain is required' });
+  }
+  
+  const verification = verificationService.generateVerification(domain.toLowerCase().trim());
+  
+  // Store pending verification
+  const pending = db.getSetting('pending_verifications') || '[]';
+  const pendingList = JSON.parse(pending);
+  pendingList.push(verification);
+  db.setSetting('pending_verifications', JSON.stringify(pendingList.slice(-50)));
+  
+  res.json(verification);
+});
+
+// Check verification status
+router.post('/verify/check', async (req, res) => {
+  const { domain, token, method } = req.body;
+  
+  if (!domain || !token) {
+    return res.status(400).json({ error: 'Domain and token are required' });
+  }
+  
+  const result = await verificationService.verify(domain, token, method || 'AUTO');
+  
+  res.json(result);
+});
+
+// Add new domain (with optional verification)
 router.post('/', (req, res) => {
-  const { name, provider, provider_config, auto_fix, notify_email } = req.body;
+  const { name, provider, provider_config, auto_fix, notify_email, verify } = req.body;
   
   try {
-    const domain = db.addDomain({
+    const domainData = {
       name: name.toLowerCase().trim(),
       provider: provider || 'manual',
       provider_config: provider_config || {},
       auto_fix: auto_fix ? 1 : 0,
       notify_email: notify_email || null,
       status: 'active'
+    };
+    
+    // If verification provided, mark as verified
+    if (verify && verify.token) {
+      domainData.verified = 1;
+      domainData.verified_at = new Date().toISOString();
+      domainData.verification_method = verify.method || 'TXT';
+    }
+    
+    const domain = db.addDomain(domainData);
+    res.json({ 
+      success: true, 
+      ...domain,
+      verified: domain.verified || false,
+      features_unlocked: domain.verified ? true : false
     });
-    res.json({ success: true, ...domain });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
+});
+
+// Verify existing domain
+router.post('/:id/verify', async (req, res) => {
+  const { token, method } = req.body;
+  const domains = db.getDomains();
+  const domain = domains.find(d => d.id === parseInt(req.params.id));
+  
+  if (!domain) {
+    return res.status(404).json({ error: 'Domain not found' });
+  }
+  
+  if (!token) {
+    return res.status(400).json({ error: 'Verification token required' });
+  }
+  
+  const result = await verificationService.verify(domain.name, token, method || 'TXT');
+  
+  if (result.verified) {
+    db.updateDomain(domain.id, {
+      verified: 1,
+      verified_at: result.verified_at,
+      verification_method: result.method
+    });
+  }
+  
+  res.json({
+    verified: result.verified,
+    method: result.method,
+    verified_at: result.verified_at,
+    reason: result.reason
+  });
+});
+
+// Get verification status for domain
+router.get('/:id/verify/status', (req, res) => {
+  const domains = db.getDomains();
+  const domain = domains.find(d => d.id === parseInt(req.params.id));
+  
+  if (!domain) {
+    return res.status(404).json({ error: 'Domain not found' });
+  }
+  
+  res.json({
+    domain: domain.name,
+    verified: domain.verified === 1,
+    verified_at: domain.verified_at || null,
+    verification_method: domain.verification_method || null,
+    features_unlocked: domain.verified === 1
+  });
+});
+
+// Generate new verification token for existing domain
+router.get('/:id/verify/generate', (req, res) => {
+  const domains = db.getDomains();
+  const domain = domains.find(d => d.id === parseInt(req.params.id));
+  
+  if (!domain) {
+    return res.status(404).json({ error: 'Domain not found' });
+  }
+  
+  const verification = verificationService.generateVerification(domain.name);
+  res.json(verification);
 });
 
 // Bulk add domains
@@ -101,6 +219,20 @@ router.get('/:id', (req, res) => {
 router.post('/:id/scan', async (req, res) => {
   const domain = db.getDomain(parseInt(req.params.id));
   if (!domain) return res.status(404).json({ error: 'Domain not found' });
+
+  // Check domain ownership verification
+  if (!domain.verified) {
+    return res.status(403).json({ 
+      error: 'Domain not verified',
+      verification_required: true,
+      message: 'Please verify domain ownership before scanning',
+      instructions: {
+        method: 'TXT',
+        record: `_nexusemail-verification`,
+        value: 'Add a TXT record with verification token'
+      }
+    });
+  }
 
   try {
     const audit = await auditor.auditDomain(domain.name);
