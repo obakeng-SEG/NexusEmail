@@ -49,6 +49,10 @@ export default function Dashboard() {
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
   const [reportDomainId, setReportDomainId] = useState<number | null>(null);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<any>(null);
+  const [providerCreds, setProviderCreds] = useState<any>({});
+  const [savingProvider, setSavingProvider] = useState(false);
   
   // Brand Protection Advanced
   const [monitoredBrands, setMonitoredBrands] = useState<any[]>([]);
@@ -507,6 +511,61 @@ export default function Dashboard() {
     }
   };
 
+  const openProviderModal = (provider: any) => {
+    setSelectedProvider(provider);
+    const creds = settings?.provider_credentials?.[provider.name.toLowerCase()] || {};
+    setProviderCreds(creds);
+    setShowProviderModal(true);
+  };
+
+  const saveProviderCredentials = async () => {
+    if (!selectedProvider) return;
+    setSavingProvider(true);
+    try {
+      await fetch(`${API_BASE}/settings/providers/credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: selectedProvider.name,
+          credentials: providerCreds
+        })
+      });
+      alert(`${selectedProvider.name} connected successfully!`);
+      setShowProviderModal(false);
+      loadSettings();
+    } catch (e) {
+      alert('Failed to save credentials: ' + e.message);
+    } finally {
+      setSavingProvider(false);
+    }
+  };
+
+  const disconnectProvider = async (providerName: string) => {
+    try {
+      await fetch(`${API_BASE}/settings/providers/credentials/${providerName}`, {
+        method: 'DELETE'
+      });
+      alert(`${providerName} disconnected`);
+      loadSettings();
+    } catch (e) {
+      alert('Failed to disconnect: ' + e.message);
+    }
+  };
+
+  const getProviderFields = (providerName: string) => {
+    const fields: Record<string, string[]> = {
+      'Cloudflare': ['api_key', 'email'],
+      'AWS Route53': ['access_key_id', 'secret_access_key', 'region'],
+      'GoDaddy': ['api_key', 'secret'],
+      'Namecheap': ['api_key', 'username'],
+      'Azure DNS': ['client_id', 'client_secret', 'tenant_id', 'subscription_id'],
+      'Google Cloud': ['service_account_json', 'project_id'],
+      'DigitalOcean': ['api_token'],
+      'Vercel': ['token']
+    };
+    return fields[providerName] || ['api_key'];
+  };
+
   const dnsProviders = [
     { name: 'Cloudflare', icon: Server, connected: false },
     { name: 'AWS Route53', icon: Server, connected: false },
@@ -864,24 +923,90 @@ export default function Dashboard() {
 
             <TabsContent value="integrations" className="space-y-6">
               <h2 className="text-lg font-semibold">DNS Providers</h2>
+              <p className="text-sm text-muted-foreground">Connect your DNS providers to enable auto-remediation (auto-fix SPF/DMARC records)</p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {dnsProviders.map((provider) => (
-                  <Card key={provider.name} className="border-border/40">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                          <provider.icon className="w-5 h-5" />
+                {dnsProviders.map((provider: any) => {
+                  const isConnected = settings?.provider_credentials?.[provider.name.toLowerCase()];
+                  return (
+                    <Card key={provider.name} className={`border-border/40 ${isConnected ? 'border-emerald-500/50 bg-emerald-500/5' : ''}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                              <provider.icon className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <span className="font-medium">{provider.name}</span>
+                              {isConnected && (
+                                <p className="text-xs text-emerald-500">Connected</p>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <span className="font-medium">{provider.name}</span>
-                      </div>
-                      <Button size="sm" variant="outline" className="text-xs">
-                        Configure
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                        {isConnected ? (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="w-full text-xs"
+                            onClick={() => disconnectProvider(provider.name)}
+                          >
+                            Disconnect
+                          </Button>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="w-full text-xs"
+                            onClick={() => openProviderModal(provider)}
+                          >
+                            Configure
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </TabsContent>
+
+        {showProviderModal && selectedProvider && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowProviderModal(false)}>
+            <div className="bg-background border rounded-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold">Configure {selectedProvider.name}</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowProviderModal(false)}>
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+              
+              <p className="text-sm text-muted-foreground mb-4">
+                Enter your {selectedProvider.name} API credentials to enable auto-remediation.
+              </p>
+
+              <div className="space-y-3">
+                {getProviderFields(selectedProvider.name).map((field: string) => (
+                  <div key={field}>
+                    <label className="text-sm font-medium capitalize">{field.replace(/_/g, ' ')}</label>
+                    <Input 
+                      type={field.includes('key') || field.includes('secret') || field.includes('token') ? 'password' : 'text'}
+                      value={providerCreds[field] || ''} 
+                      onChange={(e) => setProviderCreds({...providerCreds, [field]: e.target.value})}
+                      placeholder={`Enter ${field.replace(/_/g, ' ')}`}
+                      className="mt-1"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <Button onClick={saveProviderCredentials} disabled={savingProvider}>
+                  {savingProvider ? 'Saving...' : 'Save'}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowProviderModal(false)}>Cancel</Button>
+              </div>
+            </div>
+          </div>
+        )}
 
             <TabsContent value="notifications" className="space-y-4">
               <Card className="border-border/40">
