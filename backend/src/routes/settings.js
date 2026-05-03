@@ -5,6 +5,16 @@ const { NotificationService } = require('../services/notifications');
 
 const notificationService = new NotificationService();
 
+// Notifications (matches frontend)
+router.get('/notifications', (req, res) => {
+  res.json({
+    notify_scan_completed: db.getSetting('notify_scan_completed') === '1',
+    notify_critical_alerts: db.getSetting('notify_critical_alerts') === '1',
+    notify_weekly_report: db.getSetting('notify_weekly_report') === '1',
+    smtp_config: db.getSetting('smtp_config') ? JSON.parse(db.getSetting('smtp_config')) : null
+  });
+});
+
 // Get all config (without sensitive data)
 router.get('/config', (req, res) => {
   const credentials = db.getSetting('provider_credentials') || '{}';
