@@ -211,8 +211,6 @@ export default function Dashboard() {
     }
   };
 
-  const [showDetails, setShowDetails] = useState(false);
-
   const dnsProviders = [
     { name: 'Cloudflare', icon: Server, connected: false },
     { name: 'AWS Route53', icon: Server, connected: false },
@@ -360,7 +358,7 @@ export default function Dashboard() {
               { label: "Warnings", value: stats.warnings, icon: AlertTriangle, color: "amber", filter: "warnings" },
               { label: "Failed", value: stats.failed, icon: XCircle, color: "rose", filter: "failed" },
             ].map((stat, i) => (
-              <Card key={i} className="border-border/40 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => { setActiveTab("domains"); setDomainFilter(stat.tab === "domains" ? null : stat.tab); }}>
+              <Card key={i} className="border-border/40 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => { setActiveTab("domains"); setDomainFilter(stat.filter); }}>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-xl bg-${stat.color}-500/10 flex items-center justify-center`}>
                     <stat.icon className={`w-6 h-6 text-${stat.color}-500`} />
