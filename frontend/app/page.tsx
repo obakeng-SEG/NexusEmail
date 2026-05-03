@@ -35,6 +35,8 @@ export default function Dashboard() {
   const [showAddBrand, setShowAddBrand] = useState(false);
   const [newBrandDomain, setNewBrandDomain] = useState('');
   const [newBrandName, setNewBrandName] = useState('');
+  const [brandScanResult, setBrandScanResult] = useState<any>(null);
+  const [brandScanning, setBrandScanning] = useState(false);
   const [domainFilter, setDomainFilter] = useState<string | null>(null);
 
   // Load data on mount
@@ -803,10 +805,17 @@ export default function Dashboard() {
                           </div>
                           <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={async () => {
+                              setBrandScanning(true);
+                              setBrandScanResult(null);
                               try {
-                                await fetch(`${API_BASE}/brands/check/${brand.id}`, { method: 'POST' });
-                                alert('Brand check initiated - results will appear in console');
-                              } catch (e) { alert('Check failed'); }
+                                const res = await fetch(`${API_BASE}/brands/check/${brand.id}`, { method: 'POST' });
+                                const data = await res.json();
+                                setBrandScanResult({ ...data, brand: brand.domain });
+                              } catch (e) { 
+                                setBrandScanResult({ error: 'Scan failed' });
+                              } finally {
+                                setBrandScanning(false);
+                              }
                             }}>
                               <Search className="w-4 h-4 mr-1" /> Scan
                             </Button>
@@ -818,6 +827,70 @@ export default function Dashboard() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Scan Results Display */}
+                  {brandScanning && (
+                    <div className="mt-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-sm">Scanning for typosquatting and impersonation...</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {brandScanResult && !brandScanning && (
+                    <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="font-medium">Brand Protection Results</p>
+                        <Button variant="ghost" size="sm" onClick={() => setBrandScanResult(null)}>Clear</Button>
+                      </div>
+                      {brandScanResult.error ? (
+                        <p className="text-sm text-rose-500">{brandScanResult.error}</p>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div className="p-2 bg-emerald-500/10 rounded">
+                              <p className="text-muted-foreground">Score</p>
+                              <p className="font-bold text-lg">{brandScanResult.score}/100</p>
+                            </div>
+                            <div className="p-2 bg-muted rounded">
+                              <p className="text-muted-foreground">Typosquatting</p>
+                              <p className="font-medium">{brandScanResult.typosquatting?.length || 0} found</p>
+                            </div>
+                            <div className="p-2 bg-muted rounded">
+                              <p className="text-muted-foreground">Lookalikes</p>
+                              <p className="font-medium">{brandScanResult.lookalikes?.length || 0} found</p>
+                            </div>
+                            <div className="p-2 bg-muted rounded">
+                              <p className="text-muted-foreground">Impersonation</p>
+                              <p className="font-medium">{brandScanResult.impersonation?.length || 0} found</p>
+                            </div>
+                          </div>
+                          {brandScanResult.issues?.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium">Issues:</p>
+                              {brandScanResult.issues.map((issue: any, i: number) => (
+                                <div key={i} className="flex items-center gap-2 text-sm">
+                                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                  <span>{issue.type}: {issue.count} issues</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {brandScanResult.recommendations?.length > 0 && (
+                            <div className="text-sm text-muted-foreground">
+                              <p className="font-medium mb-1">Recommendations:</p>
+                              <ul className="list-disc list-inside">
+                                {brandScanResult.recommendations.map((rec: string, i: number) => (
+                                  <li key={i}>{rec}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
