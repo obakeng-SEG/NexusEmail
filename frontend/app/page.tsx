@@ -596,7 +596,14 @@ export default function Dashboard() {
       'NS1': ['api_key'],
       'Bunny DNS': ['api_key'],
       'UltraDNS': ['username', 'password'],
-      'EdgeDNS': ['access_token', 'cp_code']
+      'EdgeDNS': ['access_token', 'cp_code'],
+      'Hetzner DNS': ['api_token'],
+      'Domains.co.za': ['reseller_id', 'api_key'],
+      'WebAfrica': ['client_code', 'password'],
+      'HostAfrica': ['email', 'password'],
+      'MWeb': ['account_id', 'password'],
+      'Afrihost': ['client_id', 'api_key'],
+      'CoolIdeas': ['account_id', 'api_key']
     };
     return fields[providerName] || ['api_key'];
   };
@@ -622,6 +629,13 @@ export default function Dashboard() {
     { name: 'Bunny DNS', icon: Server },
     { name: 'UltraDNS', icon: Server },
     { name: 'EdgeDNS', icon: Server },
+    { name: 'Hetzner DNS', icon: Server },
+    { name: 'Domains.co.za', icon: Server },
+    { name: 'WebAfrica', icon: Server },
+    { name: 'HostAfrica', icon: Server },
+    { name: 'MWeb', icon: Server },
+    { name: 'Afrihost', icon: Server },
+    { name: 'CoolIdeas', icon: Server },
   ];
 
   if (loading) {
