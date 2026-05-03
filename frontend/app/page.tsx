@@ -50,6 +50,9 @@ export default function Dashboard() {
   const [threatForm, setThreatForm] = useState({ domain: '', threat_type: 'manual', severity: 'medium', notes: '' });
   const [brandThreats, setBrandThreats] = useState<any[]>([]);
   const [brandTakedowns, setBrandTakedowns] = useState<any[]>([]);
+  const [brandAlerts, setBrandAlerts] = useState<any[]>([]);
+  const [bulkScanning, setBulkScanning] = useState(false);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
 
   // Load data on mount
   useEffect(() => {
@@ -57,6 +60,7 @@ export default function Dashboard() {
     loadIntegrations();
     loadSettings();
     loadBrands();
+    loadAlerts();
   }, []);
 
   const loadBrands = async () => {
@@ -67,6 +71,29 @@ export default function Dashboard() {
       setMonitoredBrands(data);
     } catch (e) {
       console.error('Failed to load brands:', e);
+    }
+  };
+
+  const loadAlerts = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/brands/alerts`);
+      const data = await res.json();
+      setBrandAlerts(data);
+    } catch (e) {
+      console.error('Failed to load alerts:', e);
+    }
+  };
+
+  const bulkScanAll = async () => {
+    setBulkScanning(true);
+    try {
+      await fetch(`${API_BASE}/brands/scan/all`, { method: 'POST' });
+      loadBrands();
+      loadAlerts();
+    } catch (e) {
+      console.error('Bulk scan failed:', e);
+    } finally {
+      setBulkScanning(false);
     }
   };
 
@@ -808,9 +835,21 @@ export default function Dashboard() {
                     <CardTitle>Brand Protection</CardTitle>
                     <CardDescription>Monitor your brand against typosquatting and impersonation</CardDescription>
                   </div>
-                  <Button onClick={() => setShowAddBrand(true)}>
-                    <Plus className="w-4 h-4 mr-2" /> Add Brand
-                  </Button>
+                  <div className="flex gap-2">
+                    {brandAlerts.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={() => setShowAlertsModal(true)}>
+                        <Bell className="w-4 h-4 mr-1" /> Alerts
+                        <Badge variant="destructive" className="ml-1 text-xs">{brandAlerts.length}</Badge>
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={bulkScanAll} disabled={bulkScanning}>
+                      {bulkScanning ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                      Scan All
+                    </Button>
+                    <Button onClick={() => setShowAddBrand(true)}>
+                      <Plus className="w-4 h-4 mr-2" /> Add Brand
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {showAddBrand && (
@@ -1257,6 +1296,39 @@ export default function Dashboard() {
                   <Button variant="ghost" onClick={() => setShowThreatModal(false)}>Cancel</Button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {showAlertsModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowAlertsModal(false)}>
+            <div className="bg-background border rounded-lg w-full max-w-lg max-h-[80vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold">Threat Alerts ({brandAlerts.length})</h3>
+                <Button variant="ghost" size="sm" onClick={() => setShowAlertsModal(false)}>
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+              {brandAlerts.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No alerts</p>
+              ) : (
+                <div className="space-y-3">
+                  {brandAlerts.map((alert: any) => (
+                    <div key={alert.id} className={`p-3 border rounded-lg ${alert.severity === 'high' ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30'}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{alert.domain}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{alert.message}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{alert.brand_name} • {new Date(alert.timestamp).toLocaleString()}</p>
+                        </div>
+                        <Badge variant={alert.severity === 'high' ? 'destructive' : 'default'} className="text-xs">
+                          {alert.severity}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
