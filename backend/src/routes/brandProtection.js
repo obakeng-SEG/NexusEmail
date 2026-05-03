@@ -192,7 +192,7 @@ router.delete('/:id/safe', (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/:id/takedown', (req, res) => {
+router.post('/:id/takedown', async (req, res) => {
   const { domain, threat_type, evidence, contact_email } = req.body;
   const brands = JSON.parse(db.getSetting('monitored_brands') || '[]');
   const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
@@ -218,8 +218,37 @@ router.post('/:id/takedown', (req, res) => {
     provider: registrar.registrar,
     abuse_email: registrar.abuse_email,
     email_template: brandService.buildTakedownEmail(domain, brand.brand_name, registrar.registrar, threat_type),
+    sent: false,
     notes: ''
   };
+
+  // Try to send email via SMTP
+  if (registrar.abuse_email) {
+    try {
+      const NotificationService = require('../services/notifications');
+      const notifService = new NotificationService();
+      
+      // Load SMTP config from database
+      const smtpConfig = JSON.parse(db.getSetting('smtp_config') || '{}');
+      if (smtpConfig.host && smtpConfig.host.trim()) {
+        notifService.configureSMTP(smtpConfig);
+        
+        const emailResult = await notifService.sendNotification(
+          registrar.abuse_email,
+          `[Brand Abuse Report] ${domain} - ${threat_type || 'Impersonation'}`,
+          takedown.email_template
+        );
+        
+        if (emailResult.success) {
+          takedown.sent = true;
+          takedown.status = 'sent';
+          takedown.sent_at = new Date().toISOString();
+        }
+      }
+    } catch (e) {
+      console.error('Failed to send takedown email:', e.message);
+    }
+  }
   
   brands[brandIndex].takedowns.push(takedown);
   db.setSetting('monitored_brands', JSON.stringify(brands));
