@@ -580,9 +580,6 @@ export default function Dashboard() {
       'Cloudflare': ['api_key', 'email'],
       'AWS Route53': ['access_key_id', 'secret_access_key', 'region'],
       'GoDaddy': ['api_key', 'secret'],
-      'Namecheap': ['api_key', 'username'],
-      'Azure DNS': ['client_id', 'client_secret', 'tenant_id', 'subscription_id'],
-      'Google Cloud': ['service_account_json', 'project_id'],
       'DigitalOcean': ['api_token'],
       'Vercel': ['token']
     };
@@ -593,9 +590,6 @@ export default function Dashboard() {
     { name: 'Cloudflare', icon: Server, connected: false },
     { name: 'AWS Route53', icon: Server, connected: false },
     { name: 'GoDaddy', icon: Server, connected: false },
-    { name: 'Namecheap', icon: Server, connected: false },
-    { name: 'Azure DNS', icon: Server, connected: false },
-    { name: 'Google Cloud', icon: Server, connected: false },
     { name: 'DigitalOcean', icon: Server, connected: false },
     { name: 'Vercel', icon: Server, connected: false },
   ];
