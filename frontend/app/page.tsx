@@ -28,13 +28,26 @@ export default function Dashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [integrations, setIntegrations] = useState([]);
   const [notifications, setNotifications] = useState({});
+  const [activeTab, setActiveTab] = useState("domains");
+  const [brands, setBrands] = useState([]);
 
   // Load data on mount
   useEffect(() => {
     loadDomains();
     loadIntegrations();
     loadSettings();
+    loadBrands();
   }, []);
+
+  const loadBrands = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/brands`);
+      const data = await res.json();
+      setBrands(data);
+    } catch (e) {
+      console.error('Failed to load brands:', e);
+    }
+  };
 
   const loadDomains = async () => {
     try {
@@ -270,12 +283,12 @@ export default function Dashboard() {
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
             {[
-              { label: "Total Domains", value: stats.total, icon: Globe, color: "indigo" },
-              { label: "Passing", value: stats.passing, icon: CheckCircle, color: "emerald" },
-              { label: "Warnings", value: stats.warnings, icon: AlertTriangle, color: "amber" },
-              { label: "Failed", value: stats.failed, icon: XCircle, color: "rose" },
+              { label: "Total Domains", value: stats.total, icon: Globe, color: "indigo", tab: "domains" },
+              { label: "Passing", value: stats.passing, icon: CheckCircle, color: "emerald", tab: "domains" },
+              { label: "Warnings", value: stats.warnings, icon: AlertTriangle, color: "amber", tab: "domains" },
+              { label: "Failed", value: stats.failed, icon: XCircle, color: "rose", tab: "domains" },
             ].map((stat, i) => (
-              <Card key={i} className="border-border/40">
+              <Card key={i} className="border-border/40 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setActiveTab(stat.tab)}>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-xl bg-${stat.color}-500/10 flex items-center justify-center`}>
                     <stat.icon className={`w-6 h-6 text-${stat.color}-500`} />
@@ -290,22 +303,25 @@ export default function Dashboard() {
           </div>
 
           {/* Main Content */}
-          <Tabs defaultValue="domains" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
-              <TabsTrigger value="domains" className="data-[state=active]:bg-background">
+              <TabsTrigger value="domains" className="data-[state=active]:bg-background" data-value="domains">
                 <Globe className="w-4 h-4 mr-2" /> Domains
               </TabsTrigger>
-              <TabsTrigger value="integrations" className="data-[state=active]:bg-background">
+              <TabsTrigger value="integrations" className="data-[state=active]:bg-background" data-value="integrations">
                 <Plug className="w-4 h-4 mr-2" /> Integrations
               </TabsTrigger>
-              <TabsTrigger value="notifications" className="data-[state=active]:bg-background">
+              <TabsTrigger value="notifications" className="data-[state=active]:bg-background" data-value="notifications">
                 <Bell className="w-4 h-4 mr-2" /> Notifications
               </TabsTrigger>
-              <TabsTrigger value="reports" className="data-[state=active]:bg-background">
+              <TabsTrigger value="reports" className="data-[state=active]:bg-background" data-value="reports">
                 <BarChart3 className="w-4 h-4 mr-2" /> Reports
               </TabsTrigger>
-              <TabsTrigger value="settings" className="data-[state=active]:bg-background">
+              <TabsTrigger value="settings" className="data-[state=active]:bg-background" data-value="settings">
                 <Settings className="w-4 h-4 mr-2" /> Settings
+              </TabsTrigger>
+              <TabsTrigger value="brands" className="data-[state=active]:bg-background" data-value="brands">
+                <Shield className="w-4 h-4 mr-2" /> Brand Protection
               </TabsTrigger>
             </TabsList>
 
@@ -543,6 +559,67 @@ export default function Dashboard() {
                     </div>
                     <Button variant="outline" size="sm">Disabled</Button>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="brands" className="space-y-4">
+              <Card className="border-border/40">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Brand Protection</CardTitle>
+                    <CardDescription>Monitor your brand against typosquatting and impersonation</CardDescription>
+                  </div>
+                  <Button onClick={() => {
+                    const name = prompt("Enter brand/domain to monitor:");
+                    if (name) {
+                      fetch(`${API_BASE}/brands`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain: name, brand_name: name.split('.')[0] })
+                      }).then(() => loadBrands());
+                    }
+                  }}>
+                    <Plus className="w-4 h-4 mr-2" /> Add Brand
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {brands.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No brands being monitored</p>
+                      <p className="text-sm">Add a brand to start monitoring for typosquatting and impersonation</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {brands.map((brand: any) => (
+                        <div key={brand.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Shield className="w-5 h-5 text-indigo-500" />
+                            <div>
+                              <p className="font-medium">{brand.domain}</p>
+                              <p className="text-sm text-muted-foreground">{brand.brand_name}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={async () => {
+                              try {
+                                await fetch(`${API_BASE}/brands/check/${brand.id}`, { method: 'POST' });
+                                alert('Brand check initiated');
+                              } catch (e) { alert('Check failed'); }
+                            }}>
+                              <Search className="w-4 h-4 mr-1" /> Scan
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              fetch(`${API_BASE}/brands/${brand.id}`, { method: 'DELETE' }).then(() => loadBrands());
+                            }}>
+                              <Trash2 className="w-4 h-4 text-rose-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
