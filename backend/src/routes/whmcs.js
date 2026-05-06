@@ -2,19 +2,25 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const db = require('../db/database');
-const { sign, publicUser, hashPassword } = require('../auth');
+const { publicUser, hashPassword } = require('../auth');
 
 function configuredToken() {
-  return process.env.WHMCS_API_TOKEN || process.env.NEXUSEMAIL_WHMCS_API_TOKEN || 'dev-whmcs-token';
+  return process.env.WHMCS_API_TOKEN || process.env.NEXUSEMAIL_WHMCS_API_TOKEN || '';
 }
 
 function configuredHmacSecret() {
   return process.env.WHMCS_WEBHOOK_SECRET || process.env.NEXUSEMAIL_WHMCS_WEBHOOK_SECRET || '';
 }
 
+function safeEqual(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 function authorized(req) {
+  const configured = configuredToken();
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (token && token === configuredToken()) return true;
+  if (configured && token && safeEqual(token, configured)) return true;
 
   const secret = configuredHmacSecret();
   if (!secret) return false;
@@ -28,7 +34,7 @@ function authorized(req) {
   if (seen.some(n => n.nonce === nonce)) return false;
   const body = JSON.stringify(req.body || {});
   const expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${nonce}.${body}`).digest('hex');
-  const ok = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  const ok = safeEqual(signature, expected);
   if (!ok) return false;
   seen.push({ nonce, at: Date.now() });
   db.setSetting('whmcs_seen_nonces', JSON.stringify(seen.filter(n => Date.now() - n.at < 10 * 60 * 1000).slice(-500)));
@@ -36,8 +42,8 @@ function authorized(req) {
 }
 
 function requireWhmcs(req, res, next) {
-  if (process.env.NODE_ENV === 'production' && configuredToken() === 'dev-whmcs-token' && !configuredHmacSecret()) {
-    return res.status(500).json({ success: false, error: 'WHMCS_API_TOKEN or WHMCS_WEBHOOK_SECRET must be set in production' });
+  if (process.env.NODE_ENV === 'production' && !configuredToken() && !configuredHmacSecret()) {
+    return res.status(500).json({ success: false, error: 'WHMCS server-to-server auth is not configured' });
   }
   if (!authorized(req)) return res.status(401).json({ success: false, error: 'Unauthorized' });
   next();
@@ -48,35 +54,47 @@ function slugify(value) {
 }
 
 function orgForClient(clientId) {
-  return db.getOrganizations().find(o => o.whmcs_client_id === String(clientId));
+  if (!clientId) return null;
+  return db.getOrganizationByWhmcsClient(String(clientId));
 }
 
-function userForWhmcsContact(clientId, contactId, email) {
-  return db.getUsers().find(u =>
-    u.whmcs_client_id === String(clientId) &&
-    (contactId ? u.whmcs_contact_id === String(contactId) : u.email.toLowerCase() === String(email || '').toLowerCase())
-  );
+function validateUserOrg(user, org) {
+  if (!user) return null;
+  if (user.org_id !== org.id) {
+    const err = new Error('Email is already linked to a different organization');
+    err.status = 409;
+    throw err;
+  }
+  return user;
 }
 
 function ensureOrganization(payload) {
   const clientId = String(payload.clientId || payload.client_id || '').trim();
   if (!clientId) throw new Error('Missing field: clientId');
+  const updates = {
+    whmcs_service_id: payload.serviceId || payload.service_id || null,
+    plan: payload.plan || 'trial',
+    name: payload.companyName || payload.company || `WHMCS Client ${clientId}`,
+    status: 'active'
+  };
   const existing = orgForClient(clientId);
-  if (existing) return existing;
+  if (existing) return db.updateOrganization(existing.id, { ...updates, whmcs_client_id: clientId, slug: existing.slug });
 
   return db.addOrganization({
     slug: slugify(payload.slug || payload.companyName || payload.company || `whmcs-${clientId}`),
-    name: payload.companyName || payload.company || `WHMCS Client ${clientId}`,
+    name: updates.name,
     whmcs_client_id: clientId,
-    whmcs_service_id: payload.serviceId || payload.service_id || null,
-    plan: payload.plan || 'trial'
+    whmcs_service_id: updates.whmcs_service_id,
+    plan: updates.plan,
+    status: 'active'
   });
 }
 
 function ensureOwner(org, payload) {
   const email = String(payload.adminEmail || payload.email || '').toLowerCase().trim();
   if (!email) return null;
-  const existing = db.getUserByEmail(email);
+  const contactId = payload.contactId || payload.contact_id || null;
+  const existing = validateUserOrg(db.getUserByWhmcsContact(org.whmcs_client_id, contactId, email) || db.getUserByEmail(email), org);
   if (existing) return existing;
   return db.addUser({
     org_id: org.id,
@@ -84,9 +102,16 @@ function ensureOwner(org, payload) {
     name: payload.adminName || payload.contactName || email,
     role: 'owner',
     whmcs_client_id: org.whmcs_client_id,
-    whmcs_contact_id: payload.contactId || payload.contact_id || null,
+    whmcs_contact_id: contactId,
     password_hash: hashPassword(crypto.randomBytes(24).toString('base64url'))
   });
+}
+
+function lifecycle(req, res, status) {
+  const org = orgForClient(req.body.clientId || req.body.client_id);
+  if (!org) return res.status(404).json({ success: false, error: 'Organization not found' });
+  const updated = db.updateOrganization(org.id, { status });
+  res.json({ success: true, organization: updated });
 }
 
 router.post('/provision', requireWhmcs, (req, res) => {
@@ -95,33 +120,13 @@ router.post('/provision', requireWhmcs, (req, res) => {
     const owner = ensureOwner(org, req.body);
     res.json({ success: true, organization: org, owner: owner ? publicUser(owner) : null });
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 
-router.post('/suspend', requireWhmcs, (req, res) => {
-  const org = orgForClient(req.body.clientId || req.body.client_id);
-  if (!org) return res.status(404).json({ success: false, error: 'Organization not found' });
-  org.status = 'suspended';
-  db.saveDB?.();
-  res.json({ success: true, organization: org });
-});
-
-router.post('/unsuspend', requireWhmcs, (req, res) => {
-  const org = orgForClient(req.body.clientId || req.body.client_id);
-  if (!org) return res.status(404).json({ success: false, error: 'Organization not found' });
-  org.status = 'active';
-  db.saveDB?.();
-  res.json({ success: true, organization: org });
-});
-
-router.post('/terminate', requireWhmcs, (req, res) => {
-  const org = orgForClient(req.body.clientId || req.body.client_id);
-  if (!org) return res.status(404).json({ success: false, error: 'Organization not found' });
-  org.status = 'cancelled';
-  db.saveDB?.();
-  res.json({ success: true, organization: org });
-});
+router.post('/suspend', requireWhmcs, (req, res) => lifecycle(req, res, 'suspended'));
+router.post('/unsuspend', requireWhmcs, (req, res) => lifecycle(req, res, 'active'));
+router.post('/terminate', requireWhmcs, (req, res) => lifecycle(req, res, 'cancelled'));
 
 router.post('/login-token', requireWhmcs, (req, res) => {
   try {
@@ -129,24 +134,27 @@ router.post('/login-token', requireWhmcs, (req, res) => {
     const email = String(req.body.email || req.body.adminEmail || '').toLowerCase().trim();
     if (!email) return res.status(400).json({ success: false, error: 'Missing field: email' });
 
-    let user = userForWhmcsContact(org.whmcs_client_id, req.body.contactId || req.body.contact_id, email) || db.getUserByEmail(email);
+    const contactId = req.body.contactId || req.body.contact_id || null;
+    let user = validateUserOrg(db.getUserByWhmcsContact(org.whmcs_client_id, contactId, email) || db.getUserByEmail(email), org);
     if (!user) {
       user = db.addUser({
         org_id: org.id,
         email,
         name: req.body.name || req.body.contactName || email,
-        role: req.body.role || 'member',
+        role: ['owner', 'admin', 'member'].includes(req.body.role) ? req.body.role : 'member',
         whmcs_client_id: org.whmcs_client_id,
-        whmcs_contact_id: req.body.contactId || req.body.contact_id || null,
+        whmcs_contact_id: contactId,
         password_hash: hashPassword(crypto.randomBytes(24).toString('base64url'))
       });
     }
 
     if (org.status && org.status !== 'active') return res.status(403).json({ success: false, error: 'Organization is not active' });
-    const token = sign({ sub: user.id, org_id: user.org_id, role: user.role, source: 'whmcs' });
-    res.json({ success: true, token, user: publicUser(user) });
+    const exchangeToken = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = crypto.createHash('sha256').update(exchangeToken).digest('hex');
+    db.setSetting(`whmcs_login:${tokenHash}`, JSON.stringify({ userId: user.id, expiresAt: Date.now() + 2 * 60 * 1000 }));
+    res.json({ success: true, token: exchangeToken, expiresIn: 120, user: publicUser(user) });
   } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
+    res.status(error.status || 400).json({ success: false, error: error.message });
   }
 });
 

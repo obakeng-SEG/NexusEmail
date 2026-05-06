@@ -80,12 +80,43 @@ export default function Dashboard() {
     }
   });
 
-  // Load data on mount
+  // Load local session or consume a short-lived WHMCS handoff token.
   useEffect(() => {
+    const consumeWhmcsToken = async (handoffToken: string) => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/auth/whmcs-exchange`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: handoffToken })
+        });
+        if (!res.ok) throw new Error('WHMCS sign-in link is invalid or expired');
+        const data = await res.json();
+        localStorage.setItem('nexusemail_token', data.token);
+        localStorage.setItem('nexusemail_user', JSON.stringify(data.user));
+        setToken(data.token);
+        setUser(data.user);
+      } catch (e: any) {
+        setLoginError(e.message || 'WHMCS sign-in failed');
+      } finally {
+        const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.hash || ''}`;
+        window.history.replaceState({}, document.title, cleanUrl);
+        setLoading(false);
+      }
+    };
+
+    const url = new URL(window.location.href);
+    const handoffToken = url.searchParams.get('token');
+    if (handoffToken) {
+      consumeWhmcsToken(handoffToken);
+      return;
+    }
+
     const storedToken = localStorage.getItem('nexusemail_token');
     const storedUser = localStorage.getItem('nexusemail_user');
     if (storedToken) setToken(storedToken);
     if (storedUser) setUser(JSON.parse(storedUser));
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -131,8 +162,8 @@ export default function Dashboard() {
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
         <Card className="w-full max-w-md bg-slate-900 border-slate-800 text-white">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" /> NexusEmail</CardTitle>
-            <CardDescription>Sign in with your Segbytes client account.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" /> Nexus Brand Protection</CardTitle>
+            <CardDescription>Sign in through your Segbytes client account.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input placeholder="Email" value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} />

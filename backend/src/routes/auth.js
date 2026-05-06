@@ -16,6 +16,30 @@ router.post('/login', (req, res) => {
   res.json({ token, user: publicUser(user) });
 });
 
+router.post('/whmcs-exchange', (req, res) => {
+  const crypto = require('crypto');
+  const token = String(req.body?.token || '');
+  if (!token) return res.status(400).json({ error: 'Missing token' });
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const settingKey = `whmcs_login:${tokenHash}`;
+  const stored = db.getSetting(settingKey);
+  db.deleteSetting(settingKey);
+
+  if (!stored) return res.status(401).json({ error: 'Invalid or expired login token' });
+  let exchange;
+  try { exchange = JSON.parse(stored); } catch { return res.status(401).json({ error: 'Invalid or expired login token' }); }
+  if (!exchange?.userId || exchange.expiresAt < Date.now()) return res.status(401).json({ error: 'Invalid or expired login token' });
+
+  const user = db.getUser(exchange.userId);
+  if (!user || user.status !== 'active') return res.status(401).json({ error: 'Invalid user' });
+  const org = db.getOrganization(user.org_id);
+  if (!org || (org.status && org.status !== 'active')) return res.status(403).json({ error: 'Organization is not active' });
+
+  const jwt = sign({ sub: user.id, org_id: user.org_id, role: user.role, source: 'whmcs' });
+  res.json({ token: jwt, user: publicUser(user) });
+});
+
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });

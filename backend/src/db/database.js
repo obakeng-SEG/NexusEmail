@@ -106,6 +106,12 @@ function updateOrganization(id, updates) {
 function getUsers(orgId) { return orgId ? connection.prepare('SELECT * FROM users WHERE org_id = ? ORDER BY created_at DESC').all(orgId) : connection.prepare('SELECT * FROM users ORDER BY created_at DESC').all(); }
 function getUser(id) { return connection.prepare('SELECT * FROM users WHERE id = ?').get(id); }
 function getUserByEmail(email) { return connection.prepare('SELECT * FROM users WHERE lower(email) = lower(?)').get(email || ''); }
+function getUserByWhmcsContact(clientId, contactId, email) {
+  if (contactId) {
+    return connection.prepare('SELECT * FROM users WHERE whmcs_client_id = ? AND whmcs_contact_id = ?').get(String(clientId), String(contactId));
+  }
+  return connection.prepare('SELECT * FROM users WHERE whmcs_client_id = ? AND lower(email) = lower(?)').get(String(clientId), email || '');
+}
 function addUser(user) {
   const created = { id: user.id || nextId('usr'), org_id: user.org_id, email: user.email, name: user.name || user.email, role: user.role || 'member', platform_role: user.platform_role || null, status: user.status || 'active', password_hash: user.password_hash || null, whmcs_client_id: user.whmcs_client_id || null, whmcs_contact_id: user.whmcs_contact_id || null, created_at: user.created_at || now(), updated_at: user.updated_at || now() };
   connection.prepare(`INSERT INTO users (id, org_id, email, name, role, platform_role, status, password_hash, whmcs_client_id, whmcs_contact_id, created_at, updated_at) VALUES (@id, @org_id, @email, @name, @role, @platform_role, @status, @password_hash, @whmcs_client_id, @whmcs_contact_id, @created_at, @updated_at)`).run(created);
@@ -149,6 +155,7 @@ function deleteIntegration(id, orgId) { connection.prepare(orgId ? 'DELETE FROM 
 
 function getSetting(key, orgId) { const row = connection.prepare('SELECT value FROM settings WHERE org_id = ? AND key = ?').get(orgId || 'global', key) || connection.prepare('SELECT value FROM settings WHERE org_id = ? AND key = ?').get('global', key); return row?.value; }
 function setSetting(key, value, orgId) { connection.prepare('INSERT INTO settings (org_id, key, value, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(org_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at').run(orgId || 'global', key, String(value), now()); }
+function deleteSetting(key, orgId) { connection.prepare('DELETE FROM settings WHERE org_id = ? AND key = ?').run(orgId || 'global', key); }
 
 function addReport(report, orgId) {
   const created = { ...report, id: report.id || Date.now(), org_id: orgId || report.org_id || 'segbytes', generated_at: report.generated_at || now() };
@@ -194,4 +201,4 @@ if (!getSetting('notify_weekly_report')) setSetting('notify_weekly_report', '0')
 
 function saveDB() { connection.pragma('wal_checkpoint(PASSIVE)'); }
 
-module.exports = { getDomains, addDomain, getDomain, updateDomain, deleteDomain, addScan, getScans, getLatestScan, getIntegrations, addIntegration, deleteIntegration, getSetting, setSetting, addReport, getReports, getOrganizations, getOrganization, getOrganizationByWhmcsClient, addOrganization, updateOrganization, getUsers, getUser, getUserByEmail, addUser, saveDB };
+module.exports = { getDomains, addDomain, getDomain, updateDomain, deleteDomain, addScan, getScans, getLatestScan, getIntegrations, addIntegration, deleteIntegration, getSetting, setSetting, deleteSetting, addReport, getReports, getOrganizations, getOrganization, getOrganizationByWhmcsClient, addOrganization, updateOrganization, getUsers, getUser, getUserByEmail, getUserByWhmcsContact, addUser, saveDB };
