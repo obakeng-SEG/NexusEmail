@@ -4,11 +4,14 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
+const authRoutes = require('./routes/auth');
+const whmcsRoutes = require('./routes/whmcs');
 const domainRoutes = require('./routes/domains');
 const { router: settingsRoutes } = require('./routes/settings');
 const brandProtectionRoutes = require('./routes/brandProtection');
 const remediationRoutes = require('./routes/remediation');
 const reportsRoutes = require('./routes/reports');
+const { requireAuth } = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -60,18 +63,18 @@ app.get('/', (req, res) => {
 });
 
 // Routes
-app.use('/api/domains', domainRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/brands', brandProtectionRoutes);
-app.use('/api/domains', remediationRoutes);
-app.use('/api/reports', reportsRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/whmcs', whmcsRoutes);
+app.use('/api/domains', requireAuth, domainRoutes);
+app.use('/api/settings', requireAuth, settingsRoutes);
+app.use('/api/brands', requireAuth, brandProtectionRoutes);
+app.use('/api/domains', requireAuth, remediationRoutes);
+app.use('/api/reports', requireAuth, reportsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
   const db = require('./db/database');
-  const domains = db.getDomains();
-  const integrations = db.getIntegrations();
-  res.json({ status: 'ok', domains: domains.length, integrations: integrations.length, timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {

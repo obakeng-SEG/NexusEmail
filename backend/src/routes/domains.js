@@ -11,9 +11,9 @@ const verificationService = new DomainVerificationService();
 
 // Get all domains
 router.get('/', (req, res) => {
-  const domains = db.getDomains();
+  const domains = db.getDomains(req.orgId);
   const result = domains.map(d => {
-    const lastScan = db.getLatestScan(d.id);
+    const lastScan = db.getLatestScan(d.id, req.orgId);
     return { 
       ...d, 
       last_score: lastScan?.score || null, 
@@ -37,10 +37,10 @@ router.post('/verify/generate', (req, res) => {
   const verification = verificationService.generateVerification(domain.toLowerCase().trim());
   
   // Store pending verification
-  const pending = db.getSetting('pending_verifications') || '[]';
+  const pending = db.getSetting('pending_verifications', req.orgId) || '[]';
   const pendingList = JSON.parse(pending);
   pendingList.push(verification);
-  db.setSetting('pending_verifications', JSON.stringify(pendingList.slice(-50)));
+  db.setSetting('pending_verifications', JSON.stringify(pendingList.slice(-50)), req.orgId);
   
   res.json(verification);
 });
@@ -79,7 +79,7 @@ router.post('/', (req, res) => {
       domainData.verification_method = verify.method || 'TXT';
     }
     
-    const domain = db.addDomain(domainData);
+    const domain = db.addDomain(domainData, req.orgId);
     res.json({ 
       success: true, 
       ...domain,
@@ -94,7 +94,7 @@ router.post('/', (req, res) => {
 // Verify existing domain
 router.post('/:id/verify', async (req, res) => {
   const { token, method } = req.body;
-  const domains = db.getDomains();
+  const domains = db.getDomains(req.orgId);
   const domain = domains.find(d => d.id === parseInt(req.params.id));
   
   if (!domain) {
@@ -112,7 +112,7 @@ router.post('/:id/verify', async (req, res) => {
       verified: 1,
       verified_at: result.verified_at,
       verification_method: result.method
-    });
+    }, req.orgId);
   }
   
   res.json({
@@ -125,7 +125,7 @@ router.post('/:id/verify', async (req, res) => {
 
 // Get verification status for domain
 router.get('/:id/verify/status', (req, res) => {
-  const domains = db.getDomains();
+  const domains = db.getDomains(req.orgId);
   const domain = domains.find(d => d.id === parseInt(req.params.id));
   
   if (!domain) {
@@ -143,7 +143,7 @@ router.get('/:id/verify/status', (req, res) => {
 
 // Generate new verification token for existing domain
 router.get('/:id/verify/generate', (req, res) => {
-  const domains = db.getDomains();
+  const domains = db.getDomains(req.orgId);
   const domain = domains.find(d => d.id === parseInt(req.params.id));
   
   if (!domain) {
@@ -166,7 +166,7 @@ router.post('/bulk', (req, res) => {
 
   for (const name of domains) {
     try {
-      const domain = db.addDomain({ name: name.toLowerCase().trim(), provider: 'manual', status: 'active' });
+      const domain = db.addDomain({ name: name.toLowerCase().trim(), provider: 'manual', status: 'active' }, req.orgId);
       added.push(name);
     } catch (e) {
       failed.push({ name, error: e.message });
@@ -178,7 +178,7 @@ router.post('/bulk', (req, res) => {
 
 // Bulk scan
 router.post('/bulk-scan', async (req, res) => {
-  const domains = db.getDomains().filter(d => d.status === 'active');
+  const domains = db.getDomains(req.orgId).filter(d => d.status === 'active');
   const results = [];
   
   for (const domain of domains) {
@@ -194,7 +194,7 @@ router.post('/bulk-scan', async (req, res) => {
         dkim_selectors: JSON.stringify(audit.dkim?.selectors || []),
         dmarc_record: JSON.stringify(audit.dmarc),
         issues: JSON.stringify(audit.issues || [])
-      });
+      }, req.orgId);
       results.push({ domain: domain.name, ...audit });
     } catch (error) {
       results.push({ domain: domain.name, error: error.message });
@@ -206,18 +206,18 @@ router.post('/bulk-scan', async (req, res) => {
 
 // Get single domain
 router.get('/:id', (req, res) => {
-  const domain = db.getDomain(parseInt(req.params.id));
+  const domain = db.getDomain(parseInt(req.params.id), req.orgId);
   if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
-  const latestScan = db.getLatestScan(domain.id);
-  const history = db.getScans(domain.id, 30);
+  const latestScan = db.getLatestScan(domain.id, req.orgId);
+  const history = db.getScans(domain.id, 30, req.orgId);
 
   res.json({ ...domain, latest_scan: latestScan, history, issues: latestScan ? JSON.parse(latestScan.issues || '[]') : [] });
 });
 
 // Scan single domain
 router.post('/:id/scan', async (req, res) => {
-  const domain = db.getDomain(parseInt(req.params.id));
+  const domain = db.getDomain(parseInt(req.params.id), req.orgId);
   if (!domain) return res.status(404).json({ error: 'Domain not found' });
 
   // Check domain ownership verification
@@ -246,7 +246,7 @@ router.post('/:id/scan', async (req, res) => {
       dkim_selectors: JSON.stringify(audit.dkim?.selectors || []),
       dmarc_record: JSON.stringify(audit.dmarc),
       issues: JSON.stringify(audit.issues || [])
-    });
+    }, req.orgId);
     res.json({ success: true, ...audit });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -261,13 +261,13 @@ router.patch('/:id', (req, res) => {
   if (auto_fix !== undefined) updates.auto_fix = auto_fix ? 1 : 0;
   if (notify_email !== undefined) updates.notify_email = notify_email;
   
-  db.updateDomain(parseInt(req.params.id), updates);
+  db.updateDomain(parseInt(req.params.id), updates, req.orgId);
   res.json({ success: true });
 });
 
 // Delete domain
 router.delete('/:id', (req, res) => {
-  db.deleteDomain(parseInt(req.params.id));
+  db.deleteDomain(parseInt(req.params.id), req.orgId);
   res.json({ success: true });
 });
 

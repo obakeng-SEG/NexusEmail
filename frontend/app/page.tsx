@@ -19,6 +19,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export default function Dashboard() {
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [loginForm, setLoginForm] = useState({ email: 'admin@segbytes.co.za', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [domainInput, setDomainInput] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -67,18 +72,82 @@ export default function Dashboard() {
   const [bulkScanning, setBulkScanning] = useState(false);
   const [showAlertsModal, setShowAlertsModal] = useState(false);
 
+  const apiFetch = (url: string, options: any = {}) => fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+
   // Load data on mount
   useEffect(() => {
+    const storedToken = localStorage.getItem('nexusemail_token');
+    const storedUser = localStorage.getItem('nexusemail_user');
+    if (storedToken) setToken(storedToken);
+    if (storedUser) setUser(JSON.parse(storedUser));
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
     loadDomains();
     loadIntegrations();
     loadSettings();
     loadBrands();
     loadAlerts();
-  }, []);
+  }, [token]);
+
+  const login = async () => {
+    setLoggingIn(true);
+    setLoginError('');
+    try {
+      const res = await apiFetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm)
+      });
+      if (!res.ok) throw new Error('Invalid email or password');
+      const data = await res.json();
+      localStorage.setItem('nexusemail_token', data.token);
+      localStorage.setItem('nexusemail_user', JSON.stringify(data.user));
+      setToken(data.token);
+      setUser(data.user);
+    } catch (e: any) {
+      setLoginError(e.message || 'Login failed');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('nexusemail_token');
+    localStorage.removeItem('nexusemail_user');
+    setToken(null);
+    setUser(null);
+  };
+
+  if (!token) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
+        <Card className="w-full max-w-md bg-slate-900 border-slate-800 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" /> NexusEmail</CardTitle>
+            <CardDescription>Sign in with your Segbytes client account.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input placeholder="Email" value={loginForm.email} onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} />
+            <Input placeholder="Password" type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && login()} />
+            {loginError && <p className="text-sm text-red-400">{loginError}</p>}
+            <Button className="w-full" onClick={login} disabled={loggingIn}>{loggingIn ? 'Signing in...' : 'Sign in'}</Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   const loadBrands = async () => {
     try {
-      const res = await fetch(`${API_BASE}/brands`);
+      const res = await apiFetch(`${API_BASE}/brands`);
       const data = await res.json();
       setBrands(data);
       setMonitoredBrands(data);
@@ -89,7 +158,7 @@ export default function Dashboard() {
 
   const loadAlerts = async () => {
     try {
-      const res = await fetch(`${API_BASE}/brands/alerts`);
+      const res = await apiFetch(`${API_BASE}/brands/alerts`);
       const data = await res.json();
       setBrandAlerts(data);
     } catch (e) {
@@ -100,7 +169,7 @@ export default function Dashboard() {
   const bulkScanAll = async () => {
     setBulkScanning(true);
     try {
-      await fetch(`${API_BASE}/brands/scan/all`, { method: 'POST' });
+      await apiFetch(`${API_BASE}/brands/scan/all`, { method: 'POST' });
       loadBrands();
       loadAlerts();
     } catch (e) {
@@ -112,7 +181,7 @@ export default function Dashboard() {
 
   const loadBrandThreats = async (brandId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/brands/${brandId}/threats`);
+      const res = await apiFetch(`${API_BASE}/brands/${brandId}/threats`);
       const data = await res.json();
       setBrandThreats(data);
     } catch (e) {
@@ -122,7 +191,7 @@ export default function Dashboard() {
 
   const loadBrandTakedowns = async (brandId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/brands/${brandId}/takedowns`);
+      const res = await apiFetch(`${API_BASE}/brands/${brandId}/takedowns`);
       const data = await res.json();
       setBrandTakedowns(data);
     } catch (e) {
@@ -132,7 +201,7 @@ export default function Dashboard() {
 
   const markAsSafe = async (brandId: number, domain: string) => {
     try {
-      await fetch(`${API_BASE}/brands/${brandId}/safe`, {
+      await apiFetch(`${API_BASE}/brands/${brandId}/safe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain })
@@ -146,7 +215,7 @@ export default function Dashboard() {
 
   const submitTakedown = async (brandId: number) => {
     try {
-      await fetch(`${API_BASE}/brands/${brandId}/takedown`, {
+      await apiFetch(`${API_BASE}/brands/${brandId}/takedown`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(takedownForm)
@@ -161,7 +230,7 @@ export default function Dashboard() {
 
   const addThreat = async (brandId: number) => {
     try {
-      await fetch(`${API_BASE}/brands/${brandId}/threat`, {
+      await apiFetch(`${API_BASE}/brands/${brandId}/threat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(threatForm)
@@ -182,7 +251,7 @@ export default function Dashboard() {
 
   const loadDomains = async () => {
     try {
-      const res = await fetch(`${API_BASE}/domains`);
+      const res = await apiFetch(`${API_BASE}/domains`);
       const data = await res.json();
       setDomains(data);
       if (data.length > 0) setSelectedDomain(data[0]);
@@ -195,7 +264,7 @@ export default function Dashboard() {
 
   const loadIntegrations = async () => {
     try {
-      const res = await fetch(`${API_BASE}/settings/integrations`);
+      const res = await apiFetch(`${API_BASE}/settings/integrations`);
       const data = await res.json();
       setIntegrations(data);
     } catch (e) {
@@ -205,7 +274,7 @@ export default function Dashboard() {
 
   const loadSettings = async () => {
     try {
-      const res = await fetch(`${API_BASE}/settings/config`);
+      const res = await apiFetch(`${API_BASE}/settings/config`);
       const data = await res.json();
       setSettings(data);
       setNotifications(data.notifications || {});
@@ -227,7 +296,7 @@ export default function Dashboard() {
   const saveNotifications = async (key: string, value: boolean) => {
     try {
       const current = { ...notifications, [key]: value };
-      await fetch(`${API_BASE}/settings/notifications`, {
+      await apiFetch(`${API_BASE}/settings/notifications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(current)
@@ -240,7 +309,7 @@ export default function Dashboard() {
 
   const saveSmtp = async () => {
     try {
-      await fetch(`${API_BASE}/settings/smtp`, {
+      await apiFetch(`${API_BASE}/settings/smtp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(smtpForm)
@@ -254,7 +323,7 @@ export default function Dashboard() {
   const testSmtp = async () => {
     setTestingSmtp(true);
     try {
-      const res = await fetch(`${API_BASE}/settings/smtp/test`, { method: 'POST' });
+      const res = await apiFetch(`${API_BASE}/settings/smtp/test`, { method: 'POST' });
       const data = await res.json();
       alert(data.success ? 'SMTP connection successful!' : 'SMTP failed: ' + data.error);
     } catch (e) {
@@ -266,7 +335,7 @@ export default function Dashboard() {
 
   const toggleSchedule = async (enabled: boolean) => {
     try {
-      await fetch(`${API_BASE}/settings/schedule`, {
+      await apiFetch(`${API_BASE}/settings/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled })
@@ -279,7 +348,7 @@ export default function Dashboard() {
 
   const toggleAutoRemediation = async (enabled: boolean) => {
     try {
-      await fetch(`${API_BASE}/settings/auto-remediation`, {
+      await apiFetch(`${API_BASE}/settings/auto-remediation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled })
@@ -296,14 +365,14 @@ export default function Dashboard() {
     
     try {
       // Add domain
-      await fetch(`${API_BASE}/domains`, {
+      await apiFetch(`${API_BASE}/domains`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: domainInput.toLowerCase().trim() })
       });
       
       // Trigger scan
-      const res = await fetch(`${API_BASE}/domains/bulk-scan`, {
+      const res = await apiFetch(`${API_BASE}/domains/bulk-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain_ids: [] })
@@ -320,7 +389,7 @@ export default function Dashboard() {
 
   const scanDomain = async (domainId: number) => {
     try {
-      await fetch(`${API_BASE}/domains/${domainId}/scan`, { method: 'POST' });
+      await apiFetch(`${API_BASE}/domains/${domainId}/scan`, { method: 'POST' });
       await loadDomains();
     } catch (e) {
       console.error('Scan failed:', e);
@@ -332,7 +401,7 @@ export default function Dashboard() {
     setScanning(true);
     
     try {
-      await fetch(`${API_BASE}/domains/bulk-scan`, {
+      await apiFetch(`${API_BASE}/domains/bulk-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain_ids: selectedIds })
@@ -350,7 +419,7 @@ export default function Dashboard() {
     if (selectedIds.length === 0) return;
     
     try {
-      await fetch(`${API_BASE}/settings/bulk-delete`, {
+      await apiFetch(`${API_BASE}/settings/bulk-delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain_ids: selectedIds })
@@ -397,7 +466,7 @@ export default function Dashboard() {
 
   const viewDomain = async (domain: any) => {
     try {
-      const res = await fetch(`${API_BASE}/domains/${domain.id}`);
+      const res = await apiFetch(`${API_BASE}/domains/${domain.id}`);
       const data = await res.json();
       setSelectedDomain(data);
       setShowDetails(true);
@@ -408,7 +477,7 @@ export default function Dashboard() {
 
   const fixDomain = async (domainId: number) => {
     try {
-      const res = await fetch(`${API_BASE}/domains/${domainId}/analyze-fix`, { method: 'POST' });
+      const res = await apiFetch(`${API_BASE}/domains/${domainId}/analyze-fix`, { method: 'POST' });
       const data = await res.json();
       
       if (data.error) {
@@ -425,7 +494,7 @@ export default function Dashboard() {
 
   const openVerifyModal = async (domain: any) => {
     try {
-      const res = await fetch(`${API_BASE}/domains/${domain.id}/verify/generate`);
+      const res = await apiFetch(`${API_BASE}/domains/${domain.id}/verify/generate`);
       const data = await res.json();
       setVerifyDomain(domain);
       setVerifyToken(data.token);
@@ -439,7 +508,7 @@ export default function Dashboard() {
     if (!verifyDomain) return;
     setVerifying(true);
     try {
-      const res = await fetch(`${API_BASE}/domains/${verifyDomain.id}/verify`, {
+      const res = await apiFetch(`${API_BASE}/domains/${verifyDomain.id}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: verifyToken })
@@ -463,7 +532,7 @@ export default function Dashboard() {
   const generateReport = async (domainId: number) => {
     setGeneratingReport(true);
     try {
-      const response = await fetch(`${API_BASE}/reports/domains/${domainId}/report`);
+      const response = await apiFetch(`${API_BASE}/reports/domains/${domainId}/report`);
       const html = await response.text();
       
       const blob = new Blob([html], { type: 'text/html' });
@@ -482,7 +551,7 @@ export default function Dashboard() {
 
   const exportCSV = async () => {
     try {
-      const response = await fetch(`${API_BASE}/reports/export/csv`);
+      const response = await apiFetch(`${API_BASE}/reports/export/csv`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -497,7 +566,7 @@ export default function Dashboard() {
 
   const exportJSON = async () => {
     try {
-      const response = await fetch(`${API_BASE}/reports/export/json`);
+      const response = await apiFetch(`${API_BASE}/reports/export/json`);
       const data = await response.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -522,7 +591,7 @@ export default function Dashboard() {
     if (!selectedProvider) return;
     setSavingProvider(true);
     try {
-      await fetch(`${API_BASE}/settings/providers/credentials`, {
+      await apiFetch(`${API_BASE}/settings/providers/credentials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -542,7 +611,7 @@ export default function Dashboard() {
 
   const disconnectProvider = async (providerName: string) => {
     try {
-      await fetch(`${API_BASE}/settings/providers/credentials/${providerName}`, {
+      await apiFetch(`${API_BASE}/settings/providers/credentials/${providerName}`, {
         method: 'DELETE'
       });
       alert(`${providerName} disconnected`);
@@ -559,7 +628,7 @@ export default function Dashboard() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/settings/providers/test`, {
+      const res = await apiFetch(`${API_BASE}/settings/providers/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: provider.name, credentials: creds })
@@ -1409,7 +1478,7 @@ export default function Dashboard() {
                             size="sm" 
                             onClick={() => {
                               if (!newBrandDomain.trim()) return;
-                              fetch(`${API_BASE}/brands`, {
+                              apiFetch(`${API_BASE}/brands`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ 
@@ -1460,7 +1529,7 @@ export default function Dashboard() {
                               setBrandScanning(true);
                               setBrandScanResult(null);
                               try {
-                                const res = await fetch(`${API_BASE}/brands/check/${brand.id}`, { method: 'POST' });
+                                const res = await apiFetch(`${API_BASE}/brands/check/${brand.id}`, { method: 'POST' });
                                 const data = await res.json();
                                 setBrandScanResult({ ...data, brand: brand.domain });
                               } catch (e) { 
@@ -1475,7 +1544,7 @@ export default function Dashboard() {
                               <Eye className="w-4 h-4" />
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => {
-                              fetch(`${API_BASE}/brands/${brand.id}`, { method: 'DELETE' }).then(() => loadBrands());
+                              apiFetch(`${API_BASE}/brands/${brand.id}`, { method: 'DELETE' }).then(() => loadBrands());
                             }}>
                               <Trash2 className="w-4 h-4 text-rose-500" />
                             </Button>
