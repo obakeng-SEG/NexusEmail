@@ -80,8 +80,10 @@ function ensureOrganization(payload) {
   const existing = orgForClient(clientId);
   if (existing) return db.updateOrganization(existing.id, { ...updates, whmcs_client_id: clientId, slug: existing.slug });
 
+  const baseSlug = slugify(payload.slug || payload.companyName || payload.company || `whmcs-${clientId}`);
+  const slug = db.getOrganization(baseSlug) ? slugify(`${baseSlug}-${clientId}`) : baseSlug;
   return db.addOrganization({
-    slug: slugify(payload.slug || payload.companyName || payload.company || `whmcs-${clientId}`),
+    slug,
     name: updates.name,
     whmcs_client_id: clientId,
     whmcs_service_id: updates.whmcs_service_id,
