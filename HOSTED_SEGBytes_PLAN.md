@@ -58,3 +58,17 @@ Use agency-agents as Segbytes employees for this work:
 - `AUTH_MODE=whmcs` blocks normal client password login; platform admin remains available as break-glass/admin path.
 - Platform admin is separated from tenant owner/admin via `platform_role`.
 - `NEXUSEMAIL_DATA_DIR` allows production data to live outside the deploy directory.
+
+## Hosting decision update
+- Hosted product name: Nexus Brand Protection.
+- Repository/codebase may remain NexusEmail for now.
+- Hosting target is a plain Ubuntu LTS VM, not cPanel.
+- Runtime supervisor: PM2, not systemd app services.
+- Public URLs:
+  - Frontend: `https://brandprotection.segbytes.co.za`
+  - API: `https://api.brandprotection.segbytes.co.za/api`
+- VM paths:
+  - App: `/opt/nexus-brand-protection/app`
+  - Data: `/var/lib/nexus-brand-protection`
+  - Env: `/etc/nexus-brand-protection`
+  - Backups: `/backup/nexus-brand-protection`
