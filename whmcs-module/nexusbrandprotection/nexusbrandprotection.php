@@ -61,14 +61,14 @@ function nexusbrandprotection_api($params, $path, array $payload = [])
     }
 
     $url = $base . $path;
-    $encodedPayload = json_encode($payload);
+    $encodedPayload = http_build_query($payload);
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER => [
             'Authorization: Bearer ' . $token,
-            'Content-Type: application/json',
+            'Content-Type: application/x-www-form-urlencoded',
         ],
         CURLOPT_POSTFIELDS => $encodedPayload,
         CURLOPT_TIMEOUT => 30,

@@ -23,6 +23,10 @@ app.use(cors({
   credentials: true
 }));
 
+// Body parsing. WHMCS PHP/cURL can submit form-encoded payloads; accept both JSON and URL-encoded bodies before sanitization.
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ extended: false, limit: '10kb' }));
+
 // Input sanitization - basic XSS prevention
 const sanitizeInput = (req, res, next) => {
   const sanitize = (obj) => {
@@ -48,7 +52,6 @@ const sanitizeInput = (req, res, next) => {
 };
 
 app.use(sanitizeInput);
-app.use(express.json({ limit: '10kb' }));
 
 // Rate limiting
 const limiter = rateLimit({
