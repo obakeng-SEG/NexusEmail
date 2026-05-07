@@ -109,8 +109,13 @@ function ensureOwner(org, payload) {
   });
 }
 
+function requestPayload(req) {
+  return { ...(req.query || {}), ...(req.body || {}) };
+}
+
 function lifecycle(req, res, status) {
-  const org = orgForClient(req.body.clientId || req.body.client_id);
+  const payload = requestPayload(req);
+  const org = orgForClient(payload.clientId || payload.client_id);
   if (!org) return res.status(404).json({ success: false, error: 'Organization not found' });
   const updated = db.updateOrganization(org.id, { status });
   res.json({ success: true, organization: updated });
@@ -118,8 +123,9 @@ function lifecycle(req, res, status) {
 
 router.post('/provision', requireWhmcs, (req, res) => {
   try {
-    const org = ensureOrganization(req.body);
-    const owner = ensureOwner(org, req.body);
+    const payload = requestPayload(req);
+    const org = ensureOrganization(payload);
+    const owner = ensureOwner(org, payload);
     res.json({ success: true, organization: org, owner: owner ? publicUser(owner) : null });
   } catch (error) {
     res.status(error.status || 400).json({ success: false, error: error.message });
@@ -132,18 +138,19 @@ router.post('/terminate', requireWhmcs, (req, res) => lifecycle(req, res, 'cance
 
 router.post('/login-token', requireWhmcs, (req, res) => {
   try {
-    const org = ensureOrganization(req.body);
-    const email = String(req.body.email || req.body.adminEmail || '').toLowerCase().trim();
+    const payload = requestPayload(req);
+    const org = ensureOrganization(payload);
+    const email = String(payload.email || payload.adminEmail || '').toLowerCase().trim();
     if (!email) return res.status(400).json({ success: false, error: 'Missing field: email' });
 
-    const contactId = req.body.contactId || req.body.contact_id || null;
+    const contactId = payload.contactId || payload.contact_id || null;
     let user = validateUserOrg(db.getUserByWhmcsContact(org.whmcs_client_id, contactId, email) || db.getUserByEmail(email), org);
     if (!user) {
       user = db.addUser({
         org_id: org.id,
         email,
-        name: req.body.name || req.body.contactName || email,
-        role: ['owner', 'admin', 'member'].includes(req.body.role) ? req.body.role : 'member',
+        name: payload.name || payload.contactName || email,
+        role: ['owner', 'admin', 'member'].includes(payload.role) ? payload.role : 'member',
         whmcs_client_id: org.whmcs_client_id,
         whmcs_contact_id: contactId,
         password_hash: hashPassword(crypto.randomBytes(24).toString('base64url'))

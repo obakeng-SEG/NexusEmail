@@ -60,8 +60,8 @@ function nexusbrandprotection_api($params, $path, array $payload = [])
         throw new Exception('Nexus Brand Protection API token is not configured');
     }
 
-    $url = $base . $path;
     $encodedPayload = http_build_query($payload);
+    $url = $base . $path . ($encodedPayload ? '?' . $encodedPayload : '');
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
