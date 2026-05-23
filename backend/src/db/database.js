@@ -211,4 +211,4 @@ if (!getSetting('notify_weekly_report')) setSetting('notify_weekly_report', '0')
 
 function saveDB() { connection.pragma('wal_checkpoint(PASSIVE)'); }
 
-module.exports = { getDomains, addDomain, getDomain, updateDomain, deleteDomain, addScan, getScans, getLatestScan, getIntegrations, addIntegration, deleteIntegration, getSetting, setSetting, deleteSetting, addReport, getReports, getOrganizations, getOrganization, getOrganizationByWhmcsClient, addOrganization, updateOrganization, getUsers, getUser, getUserByEmail, getUserByWhmcsContact, addUser, saveDB };
+module.exports = { getDomains, addDomain, getDomain, updateDomain, deleteDomain, addScan, getScans, getLatestScan, getIntegrations, addIntegration, deleteIntegration, getSetting, setSetting, deleteSetting, addReport, getReports, getOrganizations, getOrganization, getOrganizationByWhmcsClient, addOrganization, updateOrganization, getUsers, getUser, getUserByEmail, getUserByWhmcsContact, addUser, saveDB, nextNumericId };

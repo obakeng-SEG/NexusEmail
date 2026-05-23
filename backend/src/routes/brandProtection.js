@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { BrandProtectionService } = require('../services/brandProtection');
 const db = require('../db/database');
+const { nextNumericId } = db;
 
 const brandService = new BrandProtectionService();
 
@@ -35,7 +36,7 @@ router.post('/', (req, res) => {
   const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
   
   const newBrand = {
-    id: Date.now(),
+    id: nextNumericId(),
     domain: domain.toLowerCase(),
     brand_name: brand_name || domain.split('.')[0],
     added_at: new Date().toISOString(),
@@ -225,7 +226,7 @@ router.post('/:id/takedown', async (req, res) => {
   const registrar = domainRegistrar.registrar ? domainRegistrar : { registrar: 'Unknown', abuse_email: null };
   
   const takedown = {
-    id: Date.now(),
+    id: nextNumericId(),
     domain,
     threat_type: threat_type || 'impersonation',
     evidence: evidence || {},
@@ -307,7 +308,7 @@ router.post('/:id/takedown/:takedownId/reply', (req, res) => {
     const takedownIndex = brands[brandIndex].takedowns.findIndex((t) => t.id === parseInt(req.params.takedownId));
     if (takedownIndex !== -1) {
       const reply = {
-        id: Date.now(),
+        id: nextNumericId(),
         from,
         subject: subject || '',
         body,
@@ -366,7 +367,7 @@ router.post('/:id/threat', (req, res) => {
   if (!brands[brandIndex].threats) brands[brandIndex].threats = [];
   
   const threat = {
-    id: Date.now(),
+    id: nextNumericId(),
     domain,
     threat_type: threat_type || 'manual',
     severity: severity || 'medium',
@@ -399,9 +400,12 @@ router.get('/alerts', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
+  // T162 — was missing req.orgId, which read from this tenant but wrote
+  // to the global settings row, leaving the deleted brand in the tenant's
+  // list AND polluting global state. Multi-tenant data-isolation fix.
   const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
   const filtered = brands.filter(b => b.id !== parseInt(req.params.id));
-  db.setSetting('monitored_brands', JSON.stringify(filtered));
+  db.setSetting('monitored_brands', JSON.stringify(filtered), req.orgId);
   res.json({ success: true });
 });
 
