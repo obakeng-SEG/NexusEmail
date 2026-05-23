@@ -964,6 +964,32 @@ export default function Dashboard() {
     },
   };
 
+  // T164 — Per-provider brand affordance for the integrations grid.
+  // Two-letter monogram + the provider's actual brand colour. Falls back to
+  // a neutral gradient if a provider isn't listed.
+  const PROVIDER_BRAND: Record<string, { mono: string; bg: string; text: string }> = {
+    'Cloudflare':       { mono: 'CF', bg: 'linear-gradient(135deg, #f6821f 0%, #f48120 100%)', text: '#fff' },
+    'AWS Route53':      { mono: 'R5', bg: 'linear-gradient(135deg, #ff9900 0%, #ff6f00 100%)', text: '#1a1208' },
+    'GoDaddy':          { mono: 'GD', bg: 'linear-gradient(135deg, #1bdbdb 0%, #00838f 100%)', text: '#fff' },
+    'DigitalOcean':     { mono: 'DO', bg: 'linear-gradient(135deg, #0080ff 0%, #0069d9 100%)', text: '#fff' },
+    'Vercel':           { mono: 'VC', bg: 'linear-gradient(135deg, #000 0%, #1a1a1a 100%)', text: '#fff' },
+    'Namecheap':        { mono: 'NC', bg: 'linear-gradient(135deg, #de3723 0%, #b81d13 100%)', text: '#fff' },
+    'NameSilo':         { mono: 'NS', bg: 'linear-gradient(135deg, #009688 0%, #00695c 100%)', text: '#fff' },
+    'Gandi':            { mono: 'GA', bg: 'linear-gradient(135deg, #ff6961 0%, #e63946 100%)', text: '#fff' },
+    'DNSimple':         { mono: 'DS', bg: 'linear-gradient(135deg, #2c3e50 0%, #1a2530 100%)', text: '#fff' },
+    'Linode':           { mono: 'LD', bg: 'linear-gradient(135deg, #00a95c 0%, #007c40 100%)', text: '#fff' },
+    'Porkbun':          { mono: 'PB', bg: 'linear-gradient(135deg, #ef9a9a 0%, #e57373 100%)', text: '#fff' },
+    'ClouDNS':          { mono: 'CD', bg: 'linear-gradient(135deg, #5b6df3 0%, #3949ab 100%)', text: '#fff' },
+    'Google Cloud DNS': { mono: 'GC', bg: 'linear-gradient(135deg, #4285f4 0%, #1976d2 100%)', text: '#fff' },
+    'Azure DNS':        { mono: 'AZ', bg: 'linear-gradient(135deg, #0072c6 0%, #004578 100%)', text: '#fff' },
+    'DNSPod':           { mono: 'DP', bg: 'linear-gradient(135deg, #00a4ff 0%, #0077c2 100%)', text: '#fff' },
+    'NS1':              { mono: 'N1', bg: 'linear-gradient(135deg, #25c2a0 0%, #1a8b73 100%)', text: '#fff' },
+    'Bunny DNS':        { mono: 'BN', bg: 'linear-gradient(135deg, #ff8800 0%, #e07000 100%)', text: '#fff' },
+    'UltraDNS':         { mono: 'UD', bg: 'linear-gradient(135deg, #d32f2f 0%, #9a0007 100%)', text: '#fff' },
+    'EdgeDNS':          { mono: 'AK', bg: 'linear-gradient(135deg, #009cde 0%, #0073a8 100%)', text: '#fff' },
+    'Hetzner DNS':      { mono: 'HZ', bg: 'linear-gradient(135deg, #d50c2d 0%, #a30923 100%)', text: '#fff' },
+  };
+
   const dnsProviders = Object.keys(PROVIDER_METADATA).map(name => ({
     name,
     icon: Server,
@@ -1237,125 +1263,280 @@ export default function Dashboard() {
             <TabsContent value="domains" className="space-y-4">
               {/* Bulk Actions */}
               {selectedIds.length > 0 && (
-                <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                  <span className="text-sm">{selectedIds.length} domains selected</span>
-                  <Button size="sm" onClick={bulkScan} disabled={scanning}>
-                    <Zap className="w-4 h-4 mr-2" /> Scan Selected
+                <div className="flex items-center gap-3 p-4 rounded-xl border border-orange-500/30 bg-gradient-to-r from-orange-500/[0.08] via-orange-500/[0.04] to-transparent">
+                  <div className="w-9 h-9 rounded-lg bg-orange-500/15 text-orange-300 flex items-center justify-center font-bold text-sm">
+                    {selectedIds.length}
+                  </div>
+                  <span className="text-sm font-medium">{selectedIds.length === 1 ? 'domain' : 'domains'} selected</span>
+                  <div className="hairline flex-1" />
+                  <Button size="sm" className="btn-premium-primary border-0 h-8" onClick={bulkScan} disabled={scanning}>
+                    <Zap className="w-3.5 h-3.5 mr-1.5" /> Scan {selectedIds.length === 1 ? 'this' : 'these'}
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={deleteDomains}>
-                    <Trash2 className="w-4 h-4 mr-2" /> Delete
+                  <Button size="sm" variant="outline" className="h-8 border-red-500/30 text-red-300 hover:bg-red-500/10 hover:border-red-500/50" onClick={deleteDomains}>
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete
                   </Button>
-                </div>
-              )}
-
-              {domainFilter && (
-                <div className="mb-4 flex items-center gap-2 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-                  <span className="text-sm text-orange-400">Filtering by:</span>
-                  <Badge variant="outline" className="border-orange-500 text-orange-400">
-                    {domainFilter}
-                  </Badge>
-                  <Button variant="ghost" size="sm" onClick={() => setDomainFilter(null)} className="ml-auto">
+                  <Button size="sm" variant="ghost" className="h-8 text-muted-foreground" onClick={() => setSelectedIds([])}>
                     Clear
                   </Button>
                 </div>
               )}
 
-              <Card className="border-border/40">
-                <CardContent className="p-0">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border/40">
-                        <th className="p-4 w-12">
-                          <Button variant="ghost" size="icon" onClick={toggleSelectAll}>
-                            {selectedIds.length === domains.length && domains.length > 0 
-                              ? <CheckSquare className="w-4 h-4" /> 
-                              : <Square className="w-4 h-4" />}
-                          </Button>
-                        </th>
-                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Domain</th>
-                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Provider</th>
-                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Score</th>
-                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Last Scan</th>
-                        <th className="text-left p-4 text-sm font-medium text-muted-foreground">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {domains.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                            No domains added yet. Add a domain above to get started.
-                          </td>
-                        </tr>
-                      ) : (domainFilter === 'passing' ? domains.filter(d => (d.last_score || 0) >= 80) :
-                        domainFilter === 'warnings' ? domains.filter(d => (d.last_score || 0) >= 50 && (d.last_score || 0) < 80) :
-                        domainFilter === 'failed' ? domains.filter(d => (d.last_score || 0) < 50) :
-                        domains).map((domain) => (
-                        <tr key={domain.id} className="border-b border-border/20 hover:bg-muted/30">
-                          <td className="p-4">
-                            <Button variant="ghost" size="icon" onClick={() => toggleSelect(domain.id)}>
-                              {selectedIds.includes(domain.id) 
-                                ? <CheckSquare className="w-4 h-4 text-orange-500" /> 
-                                : <Square className="w-4 h-4" />}
+              {/* T164 — KPI strip: portfolio at-a-glance for the domains you operate */}
+              {domains.length > 0 && (() => {
+                const total = domains.length;
+                const verified = domains.filter((d: any) => d.verified).length;
+                const scoredDomains = domains.filter((d: any) => typeof d.last_score === 'number');
+                const avgScore = scoredDomains.length > 0
+                  ? Math.round(scoredDomains.reduce((s: number, d: any) => s + (d.last_score || 0), 0) / scoredDomains.length)
+                  : null;
+                const atRisk = domains.filter((d: any) => typeof d.last_score === 'number' && d.last_score < 80).length;
+                const avgScoreColor = avgScore == null ? 'text-muted-foreground' : avgScore >= 80 ? 'text-emerald-400' : avgScore >= 50 ? 'text-amber-400' : 'text-red-400';
+                const stats = [
+                  { label: 'Total domains', value: total, hint: `${total === 1 ? 'domain' : 'domains'} on file`, icon: Globe, accent: 'text-foreground' },
+                  { label: 'Verified', value: verified, hint: `${total - verified} pending verification`, icon: CheckCircle, accent: verified === total ? 'text-emerald-400' : 'text-foreground' },
+                  { label: 'Avg health', value: avgScore == null ? '—' : `${avgScore}`, hint: avgScore == null ? 'No scans yet' : avgScore >= 80 ? 'Strong posture' : avgScore >= 50 ? 'Fixes recommended' : 'Action required', icon: Activity, accent: avgScoreColor },
+                  { label: 'At risk', value: atRisk, hint: atRisk === 0 ? 'No domains below 80' : `${atRisk} below threshold`, icon: AlertTriangle, accent: atRisk > 0 ? 'text-amber-400' : 'text-emerald-400' },
+                ];
+                return (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {stats.map((s) => (
+                      <div key={s.label} className="premium-surface premium-card border-0 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-[11px] uppercase tracking-widest text-muted-foreground font-semibold">{s.label}</p>
+                          <s.icon className="w-3.5 h-3.5 text-muted-foreground" />
+                        </div>
+                        <p className={`font-display text-3xl font-bold tracking-tight tabular-nums ${s.accent}`}>{s.value}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1 leading-tight">{s.hint}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Filter pills */}
+              {domains.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-xs text-muted-foreground mr-1">Filter:</p>
+                  {[
+                    { key: null, label: 'All', count: domains.length },
+                    { key: 'passing', label: 'Passing', count: domains.filter((d: any) => (d.last_score || 0) >= 80).length },
+                    { key: 'warnings', label: 'Warnings', count: domains.filter((d: any) => (d.last_score || 0) >= 50 && (d.last_score || 0) < 80).length },
+                    { key: 'failed', label: 'Failed', count: domains.filter((d: any) => (d.last_score || 0) < 50 && d.last_score != null).length },
+                  ].map((f) => {
+                    const active = domainFilter === f.key;
+                    return (
+                      <button
+                        key={f.label}
+                        onClick={() => setDomainFilter(f.key as any)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${active ? 'bg-orange-500/15 text-orange-300 border border-orange-500/30' : 'bg-white/[0.03] text-muted-foreground border border-white/5 hover:bg-white/[0.06] hover:text-foreground'}`}
+                      >
+                        {f.label}
+                        <span className={`ml-1.5 ${active ? 'text-orange-400' : 'text-muted-foreground/70'}`}>{f.count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Domain list — card rows, not a table */}
+              {domains.length === 0 ? (
+                <Card className="premium-surface premium-card border-0">
+                  <CardContent className="p-12 text-center">
+                    <div className="inline-flex w-16 h-16 rounded-2xl bg-orange-500/10 text-orange-400 items-center justify-center mb-4">
+                      <Globe className="w-7 h-7" />
+                    </div>
+                    <h3 className="font-display text-lg font-bold tracking-tight mb-1">No domains yet</h3>
+                    <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+                      Add a domain in the search above to start scanning SPF / DKIM / DMARC posture.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {/* Select-all bar */}
+                  <div className="flex items-center gap-3 px-4 py-2 text-xs text-muted-foreground">
+                    <button onClick={toggleSelectAll} className="flex items-center gap-2 hover:text-foreground transition-colors">
+                      {selectedIds.length === domains.length && domains.length > 0
+                        ? <CheckSquare className="w-3.5 h-3.5 text-orange-400" />
+                        : <Square className="w-3.5 h-3.5" />}
+                      <span>Select all</span>
+                    </button>
+                    <div className="hairline flex-1" />
+                    <span>{((domainFilter === 'passing' ? domains.filter((d: any) => (d.last_score || 0) >= 80) :
+                            domainFilter === 'warnings' ? domains.filter((d: any) => (d.last_score || 0) >= 50 && (d.last_score || 0) < 80) :
+                            domainFilter === 'failed' ? domains.filter((d: any) => (d.last_score || 0) < 50 && d.last_score != null) :
+                            domains).length)} shown</span>
+                  </div>
+
+                  {((domainFilter === 'passing' ? domains.filter((d: any) => (d.last_score || 0) >= 80) :
+                    domainFilter === 'warnings' ? domains.filter((d: any) => (d.last_score || 0) >= 50 && (d.last_score || 0) < 80) :
+                    domainFilter === 'failed' ? domains.filter((d: any) => (d.last_score || 0) < 50 && d.last_score != null) :
+                    domains)).map((domain: any) => {
+                    const score = domain.last_score;
+                    const hasScore = typeof score === 'number';
+                    const scoreColor = !hasScore ? '#94a3b8' : score >= 80 ? '#86efac' : score >= 50 ? '#fbbf24' : '#fca5a5';
+                    const scoreRing = !hasScore ? 0 : Math.max(0, Math.min(100, score));
+                    const isSelected = selectedIds.includes(domain.id);
+                    const lastScanAgo = (() => {
+                      if (!domain.last_scan) return 'Never scanned';
+                      const ms = Date.now() - new Date(domain.last_scan).getTime();
+                      const sec = Math.floor(ms / 1000);
+                      if (sec < 60) return 'Just now';
+                      if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+                      if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+                      return `${Math.floor(sec / 86400)}d ago`;
+                    })();
+                    const spf = domain.latest_scan?.spf_status || (hasScore ? 'UNKNOWN' : null);
+                    const dkim = domain.latest_scan?.dkim_status || (hasScore ? 'UNKNOWN' : null);
+                    const dmarc = domain.latest_scan?.dmarc_status || (hasScore ? 'UNKNOWN' : null);
+                    const pillClass = (status: string | null) => !status ? 'bg-white/5 text-muted-foreground border-white/5' :
+                      status === 'PASS' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' :
+                      status === 'FAIL' ? 'bg-red-500/10 text-red-300 border-red-500/30' :
+                      'bg-amber-500/10 text-amber-300 border-amber-500/30';
+
+                    return (
+                      <div
+                        key={domain.id}
+                        className={`premium-surface premium-card rounded-xl p-4 ${isSelected ? 'ring-2 ring-orange-500/40 border-orange-500/30' : 'border-0'}`}
+                      >
+                        <div className="flex items-center gap-4">
+                          {/* Selection */}
+                          <button
+                            onClick={() => toggleSelect(domain.id)}
+                            className="flex-shrink-0 w-7 h-7 rounded-md border border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5 flex items-center justify-center transition-colors"
+                            aria-label={isSelected ? 'Deselect' : 'Select'}
+                          >
+                            {isSelected
+                              ? <CheckSquare className="w-3.5 h-3.5 text-orange-400" />
+                              : <Square className="w-3.5 h-3.5 text-muted-foreground" />}
+                          </button>
+
+                          {/* Score ring */}
+                          <div className="relative w-14 h-14 flex-shrink-0">
+                            <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+                              <circle cx="18" cy="18" r="15.9155" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                              {hasScore && (
+                                <circle
+                                  cx="18" cy="18" r="15.9155" fill="none"
+                                  stroke={scoreColor} strokeWidth="3" strokeLinecap="round"
+                                  strokeDasharray={`${scoreRing} ${100 - scoreRing}`}
+                                />
+                              )}
+                            </svg>
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="font-display text-base font-bold tabular-nums" style={{ color: scoreColor }}>
+                                {hasScore ? score : '—'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Domain info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-display font-semibold tracking-tight truncate">{domain.name}</p>
+                              {domain.verified ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0">
+                                  <CheckCircle className="w-2.5 h-2.5" /> Verified
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => openVerifyModal(domain)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-400 hover:text-amber-300 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/15 flex-shrink-0 transition-colors"
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5" /> Verify
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              {[{ k: 'SPF', v: spf }, { k: 'DKIM', v: dkim }, { k: 'DMARC', v: dmarc }].map((p) => (
+                                <span key={p.k} className={`inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${pillClass(p.v)}`}>
+                                  {p.k}
+                                  {p.v && <span className="opacity-70">·</span>}
+                                  {p.v && <span>{p.v === 'PASS' ? '✓' : p.v === 'FAIL' ? '✕' : '?'}</span>}
+                                </span>
+                              ))}
+                              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> {lastScanAgo}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <Button size="icon" variant="ghost" className="h-9 w-9 hover:bg-orange-500/10 hover:text-orange-300" onClick={() => scanDomain(domain.id)} title="Re-scan">
+                              <RefreshCw className="w-4 h-4" />
                             </Button>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                                <Globe className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <span className="font-medium">{domain.name}</span>
-                                {domain.verified ? (
-                                  <div className="flex items-center gap-1 text-xs text-emerald-500">
-                                    <CheckCircle className="w-3 h-3" /> Verified
-                                  </div>
-                                ) : (
-                                  <Button size="sm" variant="ghost" className="text-xs text-amber-500 h-auto p-0" onClick={() => openVerifyModal(domain)}>
-                                    <AlertTriangle className="w-3 h-3 mr-1" /> Verify
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 text-muted-foreground">{domain.provider || 'Manual'}</td>
-                          <td className="p-4">
-                            <span className={`text-xl font-bold ${getScoreColor(domain.last_score || 0)}`}>
-                              {domain.last_score || '-'}
-                            </span>
-                          </td>
-                          <td className="p-4 text-muted-foreground">
-                            {domain.last_scan ? new Date(domain.last_scan).toLocaleDateString() : 'Never'}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex gap-1">
-                              <Button size="sm" variant="ghost" onClick={() => scanDomain(domain.id)} title="Scan">
-                                <RefreshCw className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => viewDomain(domain)} title="View Details">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => fixDomain(domain.id)} title="Auto-Fix">
-                                <Wrench className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
+                            <Button size="icon" variant="ghost" className="h-9 w-9 hover:bg-white/5" onClick={() => viewDomain(domain)} title="Inspect">
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-9 w-9 hover:bg-white/5" onClick={() => fixDomain(domain.id)} title="Get fix records">
+                              <Wrench className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="integrations" className="space-y-6">
               <div>
                 <p className="eyebrow mb-2">Integrations</p>
-                <h2 className="font-display text-2xl font-bold tracking-tight mb-1">DNS Providers</h2>
+                <h2 className="font-display text-2xl font-bold tracking-tight mb-1">DNS providers</h2>
                 <p className="text-sm text-muted-foreground">
-                  Connect your DNS host so we can auto-remediate SPF / DMARC / DKIM records on your behalf.
-                  Only providers below have a real API and an active integration in this build.
+                  Connect your DNS host so we can auto-remediate SPF / DMARC / DKIM records for you. Every provider listed has a real, working API.
                 </p>
               </div>
+
+              {/* T164 — Connection summary strip: how much of the integration surface is configured */}
+              {(() => {
+                const totalProviders = dnsProviders.length;
+                const connected = dnsProviders.filter((p: any) => settings?.provider_credentials?.[p.name.toLowerCase()]).length;
+                const byCat = (cat: string) => dnsProviders.filter((p: any) => p.category === cat);
+                const connectedIn = (cat: string) => byCat(cat).filter((p: any) => settings?.provider_credentials?.[p.name.toLowerCase()]).length;
+                return (
+                  <div className="premium-surface premium-card border-0 rounded-xl p-5">
+                    <div className="flex items-center gap-6 flex-wrap">
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-16 h-16 flex-shrink-0">
+                          <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
+                            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
+                            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#86efac" strokeWidth="3" strokeLinecap="round"
+                              strokeDasharray={`${totalProviders > 0 ? (connected / totalProviders) * 100 : 0} ${100 - (totalProviders > 0 ? (connected / totalProviders) * 100 : 0)}`} />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="font-display text-base font-bold tabular-nums leading-none text-emerald-300">{connected}</span>
+                            <span className="text-[9px] uppercase tracking-wider text-muted-foreground leading-none mt-0.5">of {totalProviders}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="font-display text-lg font-bold tracking-tight">
+                            {connected === 0 ? 'No providers connected' : `${connected} provider${connected === 1 ? '' : 's'} ready`}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                            {connected === 0 ? 'Connect a DNS provider below to unlock auto-remediation.' : 'Auto-remediation will run on detected issues.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="hairline flex-1 hidden sm:block" />
+                      <div className="flex items-center gap-5 text-xs">
+                        {(['Global', 'Cloud', 'Asia'] as const).map((cat) => (
+                          <div key={cat}>
+                            <p className="uppercase tracking-widest text-muted-foreground font-semibold text-[10px]">{cat}</p>
+                            <p className="font-display font-bold text-base mt-0.5 tabular-nums">
+                              <span className={connectedIn(cat) > 0 ? 'text-emerald-300' : 'text-muted-foreground'}>{connectedIn(cat)}</span>
+                              <span className="text-muted-foreground/60 mx-1">/</span>
+                              <span className="text-muted-foreground">{byCat(cat).length}</span>
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {(['Global', 'Cloud', 'Asia'] as const).map((category) => {
                 const providersInCategory = dnsProviders.filter((p: any) => p.category === category);
@@ -1363,67 +1544,86 @@ export default function Dashboard() {
                 return (
                   <div key={category} className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase">{category}</h3>
+                      <h3 className="text-xs font-semibold text-muted-foreground tracking-widest uppercase">{category}</h3>
                       <div className="hairline flex-1" />
                       <span className="text-xs text-muted-foreground">{providersInCategory.length} providers</span>
                     </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {providersInCategory.map((provider: any) => {
                         const isConnected = settings?.provider_credentials?.[provider.name.toLowerCase()];
                         const meta = PROVIDER_METADATA[provider.name];
                         const requiredCount = meta?.fields.filter((f: ProviderField) => f.required).length || 0;
+                        const brand = PROVIDER_BRAND[provider.name] || { mono: provider.name.slice(0, 2).toUpperCase(), bg: 'linear-gradient(135deg, #475569 0%, #1e293b 100%)', text: '#fff' };
+
                         return (
-                          <Card key={provider.name} className={`premium-card border ${isConnected ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-white/5 bg-white/[0.02]'}`}>
+                          <Card key={provider.name} className={`premium-surface premium-card rounded-xl ${isConnected ? 'border-emerald-500/30' : 'border-0'}`}>
                             <CardContent className="p-5">
                               <div className="flex items-start justify-between mb-3 gap-3">
-                                <div className="flex items-start gap-3 min-w-0">
-                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-muted-foreground'}`}>
-                                    <provider.icon className="w-5 h-5" />
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  <div
+                                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 font-display font-bold text-[13px] shadow-lg"
+                                    style={{ background: brand.bg, color: brand.text, letterSpacing: '-0.02em' }}
+                                  >
+                                    {brand.mono}
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="font-display font-semibold tracking-tight truncate">{provider.name}</p>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-display font-semibold tracking-tight truncate text-[15px]">{provider.name}</p>
                                     {isConnected ? (
-                                      <p className="text-xs text-emerald-400 flex items-center gap-1 mt-0.5">
-                                        <CheckCircle className="w-3 h-3" /> Connected
+                                      <p className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5 font-medium">
+                                        <span className="relative flex h-1.5 w-1.5">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+                                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                                        </span>
+                                        Connected
                                       </p>
                                     ) : (
-                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                      <p className="text-[11px] text-muted-foreground mt-0.5">
                                         {requiredCount} field{requiredCount === 1 ? '' : 's'} required
                                       </p>
                                     )}
                                   </div>
                                 </div>
                               </div>
-                              <p className="text-xs text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
+                              <p className="text-[11.5px] text-muted-foreground mb-4 line-clamp-2 leading-relaxed">
                                 {provider.summary}
                               </p>
                               {isConnected ? (
-                                <div className="flex gap-2">
+                                <div className="flex gap-1.5">
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="flex-1 text-xs h-8 border-white/10"
+                                    className="flex-1 text-[11px] h-8 border-white/10 hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-emerald-300"
                                     onClick={() => testProviderConnection(provider)}
                                   >
-                                    Test connection
+                                    <Zap className="w-3 h-3 mr-1" /> Test
                                   </Button>
                                   <Button
                                     size="sm"
-                                    variant="ghost"
-                                    className="text-xs h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                    onClick={() => disconnectProvider(provider.name)}
+                                    variant="outline"
+                                    className="text-[11px] h-8 px-2 border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5"
+                                    onClick={() => openProviderModal(provider)}
+                                    title="Reconfigure"
                                   >
-                                    <X className="w-3.5 h-3.5" />
+                                    <Settings className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-[11px] h-8 px-2 border-white/10 text-red-400 hover:bg-red-500/10 hover:border-red-500/40"
+                                    onClick={() => disconnectProvider(provider.name)}
+                                    title="Disconnect"
+                                  >
+                                    <X className="w-3 h-3" />
                                   </Button>
                                 </div>
                               ) : (
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="w-full text-xs h-8 border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5"
+                                  className="w-full text-[11px] h-8 border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5"
                                   onClick={() => openProviderModal(provider)}
                                 >
-                                  Configure
+                                  <Plug className="w-3 h-3 mr-1.5" /> Configure
                                 </Button>
                               )}
                             </CardContent>
@@ -1437,76 +1637,97 @@ export default function Dashboard() {
             </TabsContent>
 
         {showProviderModal && selectedProvider && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowProviderModal(false)}>
-            <div className="premium-surface rounded-2xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-start justify-between mb-1 gap-3">
-                <div className="min-w-0">
-                  <p className="eyebrow mb-1">Connect provider</p>
-                  <h3 className="font-display text-xl font-bold tracking-tight">{selectedProvider.name}</h3>
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1" onClick={() => setShowProviderModal(false)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                {PROVIDER_METADATA[selectedProvider.name]?.summary}
-              </p>
-
-              <div className="space-y-4">
-                {(PROVIDER_METADATA[selectedProvider.name]?.fields || []).map((field: ProviderField) => (
-                  <div key={field.key}>
-                    <div className="flex items-baseline justify-between mb-1.5">
-                      <label className="text-sm font-semibold text-foreground">
-                        {field.label}
-                        {field.required ? (
-                          <span className="ml-1.5 text-orange-400" title="Required">*</span>
-                        ) : (
-                          <span className="ml-1.5 text-xs text-muted-foreground font-normal">(optional)</span>
-                        )}
-                      </label>
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" onClick={() => setShowProviderModal(false)}>
+            <div className="premium-surface rounded-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              {/* Hero — provider brand strip */}
+              {(() => {
+                const brand = PROVIDER_BRAND[selectedProvider.name] || { mono: selectedProvider.name.slice(0, 2).toUpperCase(), bg: 'linear-gradient(135deg, #475569 0%, #1e293b 100%)', text: '#fff' };
+                const meta = PROVIDER_METADATA[selectedProvider.name];
+                return (
+                  <div className="relative px-6 pt-6 pb-5 border-b border-white/5">
+                    <div className="absolute inset-0 opacity-[0.08]" style={{ background: brand.bg }} />
+                    <div className="relative flex items-start gap-4">
+                      <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 font-display font-bold text-base shadow-2xl"
+                        style={{ background: brand.bg, color: brand.text, letterSpacing: '-0.02em' }}
+                      >
+                        {brand.mono}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="eyebrow mb-1">Connect provider · {meta?.category}</p>
+                        <h3 className="font-display text-xl font-bold tracking-tight">{selectedProvider.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{meta?.summary}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1 -mr-1" onClick={() => setShowProviderModal(false)}>
+                        <X className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Input
-                      type={field.type}
-                      value={providerCreds[field.key] || ''}
-                      onChange={(e) => setProviderCreds({...providerCreds, [field.key]: e.target.value})}
-                      placeholder={field.placeholder}
-                      className="bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm"
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{field.description}</p>
                   </div>
-                ))}
-              </div>
+                );
+              })()}
 
-              <div className="mt-5 p-3 rounded-md bg-white/[0.03] border border-white/5 flex items-start gap-3">
-                <i className="text-muted-foreground mt-0.5"><Key className="w-4 h-4" /></i>
-                <div className="flex-1 text-xs text-muted-foreground leading-relaxed">
-                  Need an API key? <a
-                    href={PROVIDER_METADATA[selectedProvider.name]?.docsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-orange-400 hover:text-orange-300 underline underline-offset-2"
-                  >
-                    Open {selectedProvider.name} API settings
-                  </a>. Credentials are stored encrypted at rest, scoped to this tenant only.
+              <div className="p-6">
+                {/* Field stack */}
+                <div className="space-y-4">
+                  {(PROVIDER_METADATA[selectedProvider.name]?.fields || []).map((field: ProviderField) => (
+                    <div key={field.key}>
+                      <div className="flex items-baseline justify-between mb-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                          {field.label}
+                          {field.required && <span className="ml-1.5 text-orange-400 normal-case" title="Required">*</span>}
+                        </label>
+                        {!field.required && <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Optional</span>}
+                      </div>
+                      <Input
+                        type={field.type}
+                        value={providerCreds[field.key] || ''}
+                        onChange={(e) => setProviderCreds({...providerCreds, [field.key]: e.target.value})}
+                        placeholder={field.placeholder}
+                        className="bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{field.description}</p>
+                    </div>
+                  ))}
                 </div>
-              </div>
 
-              <div className="flex gap-2 mt-5">
-                <Button
-                  className="btn-premium-primary border-0"
-                  onClick={saveProviderCredentials}
-                  disabled={
-                    savingProvider ||
-                    !!(PROVIDER_METADATA[selectedProvider.name]?.fields || [])
-                      .filter((f: ProviderField) => f.required)
-                      .find((f: ProviderField) => !providerCreds[f.key]?.trim())
-                  }
-                >
-                  {savingProvider ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving…</> : <><CheckCircle className="w-4 h-4 mr-2" /> Save credentials</>}
-                </Button>
-                <Button variant="ghost" onClick={() => setShowProviderModal(false)}>Cancel</Button>
+                {/* Docs deep-link + security note */}
+                <div className="mt-5 p-3 rounded-lg bg-white/[0.03] border border-white/5 flex items-start gap-3">
+                  <Key className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 text-[11px] text-muted-foreground leading-relaxed">
+                    <p className="mb-1">
+                      <a
+                        href={PROVIDER_METADATA[selectedProvider.name]?.docsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-orange-300 hover:text-orange-200 font-medium underline underline-offset-2"
+                      >
+                        Open {selectedProvider.name} API settings ↗
+                      </a>
+                    </p>
+                    <p>Credentials are stored encrypted at rest, scoped to this tenant. We never log or display them after save.</p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 mt-5">
+                  <Button
+                    className="btn-premium-primary border-0 flex-1"
+                    onClick={saveProviderCredentials}
+                    disabled={
+                      savingProvider ||
+                      !!(PROVIDER_METADATA[selectedProvider.name]?.fields || [])
+                        .filter((f: ProviderField) => f.required)
+                        .find((f: ProviderField) => !providerCreds[f.key]?.trim())
+                    }
+                  >
+                    {savingProvider ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving…</> : <><CheckCircle className="w-4 h-4 mr-2" /> Save credentials</>}
+                  </Button>
+                  <Button variant="outline" className="border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={() => setShowProviderModal(false)}>
+                    Cancel
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
