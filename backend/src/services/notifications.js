@@ -46,7 +46,7 @@ class NotificationService {
 
     try {
       const info = await this.transporter.sendMail({
-        from: this.config.from || 'NexusEmail <noreply@nexusemail.local>',
+        from: this.config.from || 'Nexus Brand Protection <noreply@brandprotection.segbytes.co.za>',
         to,
         subject,
         html: body,
@@ -87,7 +87,7 @@ class NotificationService {
       <body>
         <div class="container">
           <div class="header">
-            <h1 style="margin: 0;">NexusEmail Scan Results</h1>
+            <h1 style="margin: 0;">Brand Protection Scan Results</h1>
             <p style="margin: 10px 0 0 0;">Domain: ${domain}</p>
           </div>
           <div class="content">
@@ -153,7 +153,7 @@ class NotificationService {
             </p>
           </div>
           <div class="footer">
-            <p>NexusEmail - Open Source Email Security</p>
+            <p>Nexus Brand Protection</p>
             <p>This email was sent automatically based on your notification settings</p>
           </div>
         </div>
@@ -163,7 +163,7 @@ class NotificationService {
 
     return await this.sendNotification(
       to,
-      `🔍 NexusEmail Scan: ${domain} - Score ${results.score}/100`,
+      `🔍 Brand Protection Scan: ${domain} - Score ${results.score}/100`,
       html
     );
   }
@@ -191,7 +191,7 @@ class NotificationService {
 
     return await this.sendNotification(
       to,
-      `📊 NexusEmail Bulk Scan: ${passCount}/${results.length} Passing`,
+      `📊 Brand Protection Bulk Scan: ${passCount}/${results.length} Passing`,
       html
     );
   }

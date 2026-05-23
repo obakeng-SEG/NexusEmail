@@ -32,6 +32,8 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addDomainError, setAddDomainError] = useState<string | null>(null);
+  const [addDomainSuccess, setAddDomainSuccess] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [fixRecommendations, setFixRecommendations] = useState<any>(null);
   const [integrations, setIntegrations] = useState([]);
@@ -391,27 +393,54 @@ export default function Dashboard() {
   };
 
   const addDomain = async () => {
-    if (!domainInput.trim()) return;
+    const raw = domainInput.trim();
+    if (!raw) return;
+    // Detect multi-domain input: split on newline, comma, semicolon, whitespace
+    const tokens = raw.split(/[\s,;]+/).map(t => t.toLowerCase().trim()).filter(Boolean);
+    if (tokens.length === 0) return;
+
     setScanning(true);
-    
+    setAddDomainError(null);
+    setAddDomainSuccess(null);
+
     try {
-      // Add domain
-      await apiFetch(`${API_BASE}/domains`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: domainInput.toLowerCase().trim() })
-      });
-      
-      // Trigger scan
-      const res = await apiFetch(`${API_BASE}/domains/bulk-scan`, {
+      if (tokens.length === 1) {
+        const res = await apiFetch(`${API_BASE}/domains`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: tokens[0] })
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Add failed (HTTP ${res.status})`);
+        }
+        setAddDomainSuccess(`Added ${tokens[0]} \u2014 scanning\u2026`);
+      } else {
+        const res = await apiFetch(`${API_BASE}/domains/bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domains: tokens })
+        });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `Bulk add failed (HTTP ${res.status})`);
+        }
+        const body = await res.json();
+        const summary = `Added ${body.added?.length ?? 0} of ${body.total} (${body.failed?.length ?? 0} failed) \u2014 scanning\u2026`;
+        setAddDomainSuccess(summary);
+      }
+
+      await apiFetch(`${API_BASE}/domains/bulk-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ domain_ids: [] })
       });
-      
+
       await loadDomains();
       setDomainInput("");
-    } catch (e) {
+      setTimeout(() => setAddDomainSuccess(null), 6000);
+    } catch (e: any) {
+      setAddDomainError(e?.message || 'Failed to add domain');
       console.error('Failed to add domain:', e);
     } finally {
       setScanning(false);
@@ -742,10 +771,10 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center animate-pulse">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-orange-400 via-amber-500 to-orange-600 flex items-center justify-center animate-pulse">
             <Shield className="w-8 h-8 text-white" />
           </div>
-          <p className="text-muted-foreground">Loading NexusEmail...</p>
+          <p className="text-muted-foreground">Loading Nexus Brand Protection...</p>
         </div>
       </div>
     );
@@ -753,21 +782,20 @@ export default function Dashboard() {
 
   return (
     <div className={darkMode ? "dark" : ""}>
-      <div className="min-h-screen bg-background text-foreground">
+      <div className="min-h-screen text-foreground" style={{background: "radial-gradient(circle at top left, rgba(255, 157, 82, 0.08), transparent 35%), linear-gradient(180deg, #090b12 0%, #0b1018 100%)"}}>
         {/* Navbar */}
         <nav className="border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50">
           <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 via-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
                     <Shield className="w-5 h-5 text-white" />
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-semibold tracking-tight">NexusEmail</h1>
-                  <p className="text-xs text-muted-foreground">Open Source Email Security</p>
+                  <h1 className="text-lg font-semibold tracking-tight">Nexus Brand Protection</h1>
                 </div>
               </div>
 
@@ -779,7 +807,7 @@ export default function Dashboard() {
                   {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                 </Button>
                 <div className="ml-2 flex items-center gap-2 pl-4 border-l border-border">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-medium text-white">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-sm font-medium text-white">
                     OB
                   </div>
                 </div>
@@ -792,22 +820,22 @@ export default function Dashboard() {
           {/* Hero Search */}
           <div className="mb-10">
             <div className="relative max-w-2xl mx-auto">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl rounded-3xl" />
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-400/20 via-amber-500/20 to-orange-600/20 blur-3xl rounded-3xl" />
               <Card className="relative border-border/50 bg-card/50 backdrop-blur-xl">
                 <CardContent className="p-6">
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                       <Input
-                        placeholder="Add domain and scan (e.g., example.com)"
+                        placeholder="Add one domain, or paste many (commas / spaces / newlines)"
                         className="h-12 pl-12 bg-background/50 border-border/50"
                         value={domainInput}
                         onChange={(e) => setDomainInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && addDomain()}
+                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && addDomain()}
                       />
                     </div>
-                    <Button 
-                      className="h-12 px-6 bg-gradient-to-r from-indigo-500 to-purple-500"
+                    <Button
+                      className="h-12 px-6 bg-gradient-to-r from-orange-400 to-amber-500 text-[#1a1208] font-semibold"
                       onClick={addDomain}
                       disabled={scanning}
                     >
@@ -815,6 +843,19 @@ export default function Dashboard() {
                       Add & Scan
                     </Button>
                   </div>
+                  {addDomainError && (
+                    <div className="mt-3 p-3 rounded-md bg-red-500/10 border border-red-500/40 text-sm text-red-300">
+                      {addDomainError}
+                    </div>
+                  )}
+                  {addDomainSuccess && !addDomainError && (
+                    <div className="mt-3 p-3 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-sm text-emerald-300">
+                      {addDomainSuccess}
+                    </div>
+                  )}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Tip: paste multiple domains separated by commas, spaces, or newlines to bulk-add in one click.
+                  </p>
                 </CardContent>
               </Card>
             </div>
@@ -822,7 +863,7 @@ export default function Dashboard() {
 
           {/* Domain Details Panel */}
           {showDetails && selectedDomain && (
-            <Card className="border-indigo-500/50 mb-6">
+            <Card className="border-orange-500/50 mb-6">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div>
                   <CardTitle className="text-lg">{selectedDomain.name}</CardTitle>
@@ -891,7 +932,7 @@ export default function Dashboard() {
 
                 {/* Recommendations Section */}
                 {fixRecommendations && (
-                  <div className="space-y-3 mt-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30">
+                  <div className="space-y-3 mt-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/30">
                     <p className="font-medium text-sm">Recommended DNS Records:</p>
                     <div className="grid gap-2 text-xs font-mono">
                       {fixRecommendations.recommended_records?.spf && (
@@ -972,7 +1013,7 @@ export default function Dashboard() {
             <TabsContent value="domains" className="space-y-4">
               {/* Bulk Actions */}
               {selectedIds.length > 0 && (
-                <div className="flex items-center gap-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
+                <div className="flex items-center gap-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/20">
                   <span className="text-sm">{selectedIds.length} domains selected</span>
                   <Button size="sm" onClick={bulkScan} disabled={scanning}>
                     <Zap className="w-4 h-4 mr-2" /> Scan Selected
@@ -984,9 +1025,9 @@ export default function Dashboard() {
               )}
 
               {domainFilter && (
-                <div className="mb-4 flex items-center gap-2 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
-                  <span className="text-sm text-indigo-400">Filtering by:</span>
-                  <Badge variant="outline" className="border-indigo-500 text-indigo-400">
+                <div className="mb-4 flex items-center gap-2 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                  <span className="text-sm text-orange-400">Filtering by:</span>
+                  <Badge variant="outline" className="border-orange-500 text-orange-400">
                     {domainFilter}
                   </Badge>
                   <Button variant="ghost" size="sm" onClick={() => setDomainFilter(null)} className="ml-auto">
@@ -1029,7 +1070,7 @@ export default function Dashboard() {
                           <td className="p-4">
                             <Button variant="ghost" size="icon" onClick={() => toggleSelect(domain.id)}>
                               {selectedIds.includes(domain.id) 
-                                ? <CheckSquare className="w-4 h-4 text-indigo-500" /> 
+                                ? <CheckSquare className="w-4 h-4 text-orange-500" /> 
                                 : <Square className="w-4 h-4" />}
                             </Button>
                           </td>
@@ -1549,7 +1590,7 @@ export default function Dashboard() {
                       {brands.map((brand: any) => (
                         <div key={brand.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex items-center gap-3">
-                            <Shield className="w-5 h-5 text-indigo-500" />
+                            <Shield className="w-5 h-5 text-orange-500" />
                             <div>
                               <p className="font-medium">{brand.domain}</p>
                               <p className="text-sm text-muted-foreground">{brand.brand_name}</p>
@@ -1587,9 +1628,9 @@ export default function Dashboard() {
 
                   {/* Scan Results Display */}
                   {brandScanning && (
-                    <div className="mt-4 p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/30 space-y-3">
+                    <div className="mt-4 p-4 bg-orange-500/10 rounded-lg border border-orange-500/30 space-y-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
                         <span className="text-sm font-medium">Scanning brand protection...</span>
                       </div>
                       
@@ -1617,7 +1658,7 @@ export default function Dashboard() {
                       
                       {/* Progress Bar */}
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 transition-all duration-300" style={{ 
+                        <div className="h-full bg-orange-500 transition-all duration-300" style={{ 
                           width: `${(brandScanResult?.progress?.filter((p: any) => p.complete).length || 0) * 16.67}%` 
                         }} />
                       </div>
@@ -1744,7 +1785,7 @@ export default function Dashboard() {
 
         <footer className="border-t border-border/40 py-6 mt-10">
           <div className="container mx-auto px-6 text-center text-sm text-muted-foreground">
-            <p>NexusEmail — Open Source Email Security Platform</p>
+            <p>Nexus Brand Protection</p>
           </div>
         </footer>
 
@@ -1811,7 +1852,7 @@ export default function Dashboard() {
 
                 <div>
                   <h4 className="font-medium mb-3 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-indigo-500" />
+                    <Zap className="w-4 h-4 text-orange-500" />
                     Takedown Requests ({brandTakedowns.length})
                   </h4>
                   {brandTakedowns.length === 0 ? (

@@ -14,6 +14,16 @@ connection.pragma('foreign_keys = ON');
 
 function now() { return new Date().toISOString(); }
 function nextId(prefix) { return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`; }
+let _numericIdCounter = 0;
+// T158 — collision-safe numeric primary key for SQLite-stored rows.
+// Uses Date.now() * 1000 + a 0-999 process-local counter so tight loops in the
+// same millisecond (e.g. POST /api/domains/bulk inserting many rows in one tick)
+// produce monotonically-increasing unique IDs. Stays well within Number.MAX_SAFE_INTEGER
+// for hundreds of years.
+function nextNumericId() {
+  _numericIdCounter = (_numericIdCounter + 1) % 1000;
+  return Date.now() * 1000 + _numericIdCounter;
+}
 function json(value) { return JSON.stringify(value ?? null); }
 function parse(value, fallback = null) { try { return value == null ? fallback : JSON.parse(value); } catch { return fallback; } }
 
@@ -120,7 +130,7 @@ function addUser(user) {
 
 function getDomains(orgId) { return connection.prepare(orgId ? 'SELECT * FROM domains WHERE org_id = ? ORDER BY created_at DESC' : 'SELECT * FROM domains ORDER BY created_at DESC').all(...(orgId ? [orgId] : [])).map(hydrateDomain); }
 function addDomain(domain, orgId) {
-  const created = { ...domain, id: domain.id || Date.now(), org_id: orgId || domain.org_id || 'segbytes', created_at: domain.created_at || now(), updated_at: now() };
+  const created = { ...domain, id: domain.id || nextNumericId(), org_id: orgId || domain.org_id || 'segbytes', created_at: domain.created_at || now(), updated_at: now() };
   connection.prepare('INSERT INTO domains (id, org_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(created.id, created.org_id, json(created), created.created_at, created.updated_at);
   return created;
 }
@@ -138,7 +148,7 @@ function deleteDomain(id, orgId) {
 }
 
 function addScan(scan, orgId) {
-  const created = { ...scan, id: scan.id || Date.now(), org_id: orgId || scan.org_id || 'segbytes', scanned_at: scan.scanned_at || now() };
+  const created = { ...scan, id: scan.id || nextNumericId(), org_id: orgId || scan.org_id || 'segbytes', scanned_at: scan.scanned_at || now() };
   connection.prepare('INSERT INTO scans (id, org_id, domain_id, data, scanned_at) VALUES (?, ?, ?, ?, ?)').run(created.id, created.org_id, created.domain_id, json(created), created.scanned_at);
   return created;
 }
@@ -147,7 +157,7 @@ function getLatestScan(domainId, orgId) { return hydrateScan(connection.prepare(
 
 function getIntegrations(orgId) { return connection.prepare(orgId ? 'SELECT * FROM integrations WHERE org_id = ? ORDER BY created_at DESC' : 'SELECT * FROM integrations ORDER BY created_at DESC').all(...(orgId ? [orgId] : [])).map(hydrateIntegration); }
 function addIntegration(integration, orgId) {
-  const created = { ...integration, id: integration.id || Date.now(), org_id: orgId || integration.org_id || 'segbytes', created_at: integration.created_at || now(), updated_at: now() };
+  const created = { ...integration, id: integration.id || nextNumericId(), org_id: orgId || integration.org_id || 'segbytes', created_at: integration.created_at || now(), updated_at: now() };
   connection.prepare('INSERT INTO integrations (id, org_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(created.id, created.org_id, json(created), created.created_at, created.updated_at);
   return created;
 }
@@ -158,7 +168,7 @@ function setSetting(key, value, orgId) { connection.prepare('INSERT INTO setting
 function deleteSetting(key, orgId) { connection.prepare('DELETE FROM settings WHERE org_id = ? AND key = ?').run(orgId || 'global', key); }
 
 function addReport(report, orgId) {
-  const created = { ...report, id: report.id || Date.now(), org_id: orgId || report.org_id || 'segbytes', generated_at: report.generated_at || now() };
+  const created = { ...report, id: report.id || nextNumericId(), org_id: orgId || report.org_id || 'segbytes', generated_at: report.generated_at || now() };
   connection.prepare('INSERT INTO reports (id, org_id, domain_id, data, generated_at) VALUES (?, ?, ?, ?, ?)').run(created.id, created.org_id, created.domain_id || null, json(created), created.generated_at);
   return created;
 }

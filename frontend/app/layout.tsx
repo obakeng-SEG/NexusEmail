@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "NexusEmail - Email Security Audit",
-  description: "Comprehensive email security auditing - DMARC, SPF, DKIM",
+  title: "Nexus Brand Protection",
+  description: "Brand monitoring, threat detection, and takedowns for your domains.",
 };
 
 export default function RootLayout({
