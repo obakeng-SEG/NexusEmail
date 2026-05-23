@@ -771,10 +771,9 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-orange-400 via-amber-500 to-orange-600 flex items-center justify-center animate-pulse">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-muted-foreground">Loading Nexus Brand Protection...</p>
+          <div className="nbp-mark w-16 h-16 mx-auto mb-5 text-[20px] animate-pulse">NBP</div>
+          <p className="font-display text-base font-semibold tracking-tight">Nexus Brand Protection</p>
+          <p className="text-xs text-muted-foreground mt-1">Loading…</p>
         </div>
       </div>
     );
@@ -784,31 +783,27 @@ export default function Dashboard() {
     <div className={darkMode ? "dark" : ""}>
       <div className="min-h-screen text-foreground" style={{background: "radial-gradient(circle at top left, rgba(255, 157, 82, 0.08), transparent 35%), linear-gradient(180deg, #090b12 0%, #0b1018 100%)"}}>
         {/* Navbar */}
-        <nav className="border-b border-border/40 bg-background/80 backdrop-blur-xl sticky top-0 z-50">
+        <nav className="border-b border-white/5 bg-background/70 backdrop-blur-2xl sticky top-0 z-50">
           <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 via-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
-                    <Shield className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-semibold tracking-tight">Nexus Brand Protection</h1>
+                <div className="nbp-mark w-10 h-10 text-[14px]">NBP</div>
+                <div className="leading-tight">
+                  <p className="eyebrow">Hosted</p>
+                  <h1 className="text-[15px] font-display font-bold tracking-tight">Nexus Brand Protection</h1>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                  <Bell className="w-5 h-5" />
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-white/5">
+                  <Bell className="w-[18px] h-[18px]" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => setDarkMode(!darkMode)} className="text-muted-foreground hover:text-foreground">
-                  {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                <Button variant="ghost" size="icon" onClick={() => setDarkMode(!darkMode)} className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-white/5">
+                  {darkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
                 </Button>
-                <div className="ml-2 flex items-center gap-2 pl-4 border-l border-border">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-sm font-medium text-white">
-                    OB
+                <div className="ml-3 flex items-center gap-2 pl-4 border-l border-white/5">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-sm font-bold text-[#1a0d04] ring-2 ring-orange-500/20 ring-offset-2 ring-offset-background">
+                    {(user?.name || 'OB').slice(0, 2).toUpperCase()}
                   </div>
                 </div>
               </div>
@@ -816,26 +811,35 @@ export default function Dashboard() {
           </div>
         </nav>
 
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-6 py-10">
           {/* Hero Search */}
           <div className="mb-10">
+            <div className="text-center mb-6 max-w-2xl mx-auto">
+              <p className="eyebrow mb-2">Domains</p>
+              <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight mb-2">
+                Add a domain. Watch its posture.
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                We'll scan SPF / DKIM / DMARC, score the result, and surface anything that needs fixing.
+              </p>
+            </div>
             <div className="relative max-w-2xl mx-auto">
-              <div className="absolute inset-0 bg-gradient-to-r from-orange-400/20 via-amber-500/20 to-orange-600/20 blur-3xl rounded-3xl" />
-              <Card className="relative border-border/50 bg-card/50 backdrop-blur-xl">
+              <div className="absolute inset-0 bg-gradient-to-r from-orange-400/15 via-amber-500/15 to-orange-600/15 blur-3xl rounded-3xl pointer-events-none" />
+              <Card className="relative premium-surface premium-card border-0">
                 <CardContent className="p-6">
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
                       <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                       <Input
                         placeholder="Add one domain, or paste many (commas / spaces / newlines)"
-                        className="h-12 pl-12 bg-background/50 border-border/50"
+                        className="h-12 pl-12 bg-background/50 border-white/10 focus-visible:border-orange-500/40"
                         value={domainInput}
                         onChange={(e) => setDomainInput(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && addDomain()}
                       />
                     </div>
                     <Button
-                      className="h-12 px-6 bg-gradient-to-r from-orange-400 to-amber-500 text-[#1a1208] font-semibold"
+                      className="h-12 px-6 btn-premium-primary border-0"
                       onClick={addDomain}
                       disabled={scanning}
                     >
@@ -989,23 +993,23 @@ export default function Dashboard() {
 
           {/* Main Content */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="bg-muted/50 p-1 h-auto flex-wrap">
-              <TabsTrigger value="domains" className="data-[state=active]:bg-background" data-value="domains">
+            <TabsList className="bg-white/[0.03] border border-white/5 p-1 h-auto flex-wrap rounded-xl">
+              <TabsTrigger value="domains" className="data-[state=active]:bg-white/[0.06] data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_0_rgba(255,255,255,0.06)_inset] data-[state=active]:border-orange-500/30 border border-transparent text-muted-foreground" data-value="domains">
                 <Globe className="w-4 h-4 mr-2" /> Domains
               </TabsTrigger>
-              <TabsTrigger value="integrations" className="data-[state=active]:bg-background" data-value="integrations">
+              <TabsTrigger value="integrations" className="data-[state=active]:bg-white/[0.06] data-[state=active]:text-foreground data-[state=active]:border-orange-500/30 border border-transparent text-muted-foreground" data-value="integrations">
                 <Plug className="w-4 h-4 mr-2" /> Integrations
               </TabsTrigger>
-              <TabsTrigger value="notifications" className="data-[state=active]:bg-background" data-value="notifications">
+              <TabsTrigger value="notifications" className="data-[state=active]:bg-white/[0.06] data-[state=active]:text-foreground data-[state=active]:border-orange-500/30 border border-transparent text-muted-foreground" data-value="notifications">
                 <Bell className="w-4 h-4 mr-2" /> Notifications
               </TabsTrigger>
-              <TabsTrigger value="reports" className="data-[state=active]:bg-background" data-value="reports">
+              <TabsTrigger value="reports" className="data-[state=active]:bg-white/[0.06] data-[state=active]:text-foreground data-[state=active]:border-orange-500/30 border border-transparent text-muted-foreground" data-value="reports">
                 <BarChart3 className="w-4 h-4 mr-2" /> Reports
               </TabsTrigger>
-              <TabsTrigger value="settings" className="data-[state=active]:bg-background" data-value="settings">
+              <TabsTrigger value="settings" className="data-[state=active]:bg-white/[0.06] data-[state=active]:text-foreground data-[state=active]:border-orange-500/30 border border-transparent text-muted-foreground" data-value="settings">
                 <Settings className="w-4 h-4 mr-2" /> Settings
               </TabsTrigger>
-              <TabsTrigger value="brands" className="data-[state=active]:bg-background" data-value="brands">
+              <TabsTrigger value="brands" className="data-[state=active]:bg-white/[0.06] data-[state=active]:text-foreground data-[state=active]:border-orange-500/30 border border-transparent text-muted-foreground" data-value="brands">
                 <Shield className="w-4 h-4 mr-2" /> Brand Protection
               </TabsTrigger>
             </TabsList>

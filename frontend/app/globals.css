@@ -3,9 +3,10 @@
 @tailwind utilities;
 
 /* T156 — Palette aligned with segbytes.co.za commercial shell.
+   T159 — Premium pass: typography, focus rings, scrollbar, transitions,
+          surface tokens, premium card class.
    Background: #090b12 (segbytes --seg-bg)
-   Primary:    pale electric orange #ff9d52 (light) / #ffaf73 (dark mode mute)
-   Surfaces follow segbytes bg-soft / bg-elevated. */
+   Primary:    pale electric orange #ff9d52 (light) / #ffaf73 (dark mute) */
 
 @layer base {
   :root {
@@ -56,13 +57,157 @@
 
 @layer base {
   * { @apply border-border; }
+
+  html {
+    /* Use Inter for body, Manrope as display face. Both injected as CSS
+       variables by next/font in app/layout.tsx. */
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+                 Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-    /* T156 — match segbytes radial accent (subtle warm glow at top-left). */
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
     background:
-      radial-gradient(circle at top left, rgba(255, 157, 82, 0.06), transparent 30%),
+      radial-gradient(circle at top left, rgba(255, 157, 82, 0.06), transparent 35%),
+      radial-gradient(circle at bottom right, rgba(255, 122, 26, 0.04), transparent 40%),
       linear-gradient(180deg, #090b12 0%, #0b1018 100%);
+    background-attachment: fixed;
     min-height: 100vh;
+  }
+
+  /* T159 — Premium focus ring: a soft orange halo replacing the default
+     browser outline. Visible only via :focus-visible so mouse users don't
+     see it on click. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.55);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* T159 — Selection: subtle warm tint, never sets foreground to a colour
+     that would clash with text. */
+  ::selection {
+    background: hsl(var(--primary) / 0.28);
+    color: hsl(var(--foreground));
+  }
+
+  /* T159 — Custom scrollbar (WebKit + Firefox). Stays out of the way and
+     warms up on hover. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 200ms ease;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
+    background-clip: padding-box;
+  }
+
+  /* T159 — Universal smooth transitions for interactive elements. */
+  button, a, input, select, textarea, [role="tab"], [role="button"] {
+    transition-property: background-color, border-color, color, opacity, box-shadow, transform;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* T159 — Headings use the display face with tighter tracking. */
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display), var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.025em;
+  }
+}
+
+@layer components {
+  /* T159 — Premium surface: layered glass + inner highlight + soft shadow
+     stack. Apply to top-tier cards (hero, primary panels). */
+  .premium-surface {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 30px 60px -25px rgba(0, 0, 0, 0.55),
+      0 10px 24px -10px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  /* Hover lift for premium cards. */
+  .premium-card {
+    transition: border-color 220ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 220ms ease;
+  }
+  .premium-card:hover {
+    border-color: rgba(255, 157, 82, 0.22);
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 36px 72px -28px rgba(0, 0, 0, 0.65),
+      0 14px 28px -10px rgba(255, 122, 26, 0.12);
+  }
+
+  /* T159 — Brand mark (the orange rounded square). Reusable across
+     navbar, loader, modals. Matches the favicon. */
+  .nbp-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #ffaf73 0%, #ff7a1a 100%);
+    color: #1a0d04;
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    border-radius: 12px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.25) inset,
+      0 8px 22px -6px rgba(255, 122, 26, 0.45),
+      0 2px 8px -2px rgba(255, 122, 26, 0.3);
+  }
+
+  /* Premium primary button — refined gradient, inner highlight, hover lift. */
+  .btn-premium-primary {
+    background: linear-gradient(135deg, #ffaf73 0%, #ff7a1a 100%);
+    color: #1a0d04;
+    font-weight: 700;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.25) inset,
+      0 8px 22px -6px rgba(255, 122, 26, 0.4);
+  }
+  .btn-premium-primary:hover {
+    background: linear-gradient(135deg, #ffbe85 0%, #ff8a30 100%);
+    transform: translateY(-1px);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.3) inset,
+      0 12px 28px -8px rgba(255, 122, 26, 0.55);
+  }
+  .btn-premium-primary:active {
+    transform: translateY(0);
+  }
+
+  /* T159 — Eyebrow text (small uppercase labels above titles). */
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 11px;
+    font-weight: 600;
+    color: hsl(var(--primary));
+  }
+
+  /* T159 — Hairline divider in section headers. */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
   }
 }
