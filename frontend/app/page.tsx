@@ -1526,56 +1526,103 @@ export default function Dashboard() {
                   {showAddBrand && (
                     <div className="mb-6 p-4 bg-muted/30 rounded-lg border">
                       <p className="font-medium mb-3">Add Brand to Monitor</p>
-                      <div className="grid gap-3">
-                        <div>
-                          <label className="text-sm text-muted-foreground">Domain</label>
-                          <Input 
-                            placeholder="example.com" 
-                            value={newBrandDomain}
-                            onChange={(e) => setNewBrandDomain(e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm text-muted-foreground">Brand Name (optional)</label>
-                          <Input 
-                            placeholder="My Company" 
-                            value={newBrandName}
-                            onChange={(e) => setNewBrandName(e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm" 
-                            onClick={() => {
-                              if (!newBrandDomain.trim()) return;
-                              apiFetch(`${API_BASE}/brands`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ 
-                                  domain: newBrandDomain.toLowerCase().trim(), 
-                                  brand_name: newBrandName || newBrandDomain.split('.')[0] 
-                                })
-                              }).then(() => {
-                                loadBrands();
-                                setNewBrandDomain('');
-                                setNewBrandName('');
+                      {domains.filter((d: any) => d.verified).length === 0 ? (
+                        <div className="space-y-3">
+                          <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-sm text-amber-300">
+                            You don't have any verified domains yet. Brand Protection only monitors domains you own and have verified, so you can't add a brand until at least one of your domains is verified.
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => {
                                 setShowAddBrand(false);
-                              });
-                            }}
-                          >
-                            <Save className="w-4 h-4 mr-1" /> Save
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => {
-                            setShowAddBrand(false);
-                            setNewBrandDomain('');
-                            setNewBrandName('');
-                          }}>
-                            Cancel
-                          </Button>
+                                setActiveTab('domains');
+                              }}
+                            >
+                              Go to Domains
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setShowAddBrand(false)}>
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="grid gap-3">
+                          <div>
+                            <label className="text-sm text-muted-foreground">Domain</label>
+                            <select
+                              value={newBrandDomain}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setNewBrandDomain(v);
+                                // Auto-fill brand name from the chosen domain's
+                                // first label (e.g. "myco.com" -> "myco") if the
+                                // user hasn't typed one already.
+                                if (v && !newBrandName.trim()) {
+                                  setNewBrandName(v.split('.')[0]);
+                                }
+                              }}
+                              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              <option value="">Select a verified domain…</option>
+                              {domains
+                                .filter((d: any) => d.verified)
+                                .map((d: any) => (
+                                  <option key={d.id} value={d.name}>{d.name}</option>
+                                ))}
+                            </select>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Only domains you've added and verified appear here. Manage them under <strong>Domains</strong>.
+                            </p>
+                          </div>
+                          <div>
+                            <label className="text-sm text-muted-foreground">Brand Name (optional)</label>
+                            <Input
+                              placeholder="My Company"
+                              value={newBrandName}
+                              onChange={(e) => setNewBrandName(e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              disabled={!newBrandDomain}
+                              onClick={() => {
+                                if (!newBrandDomain.trim()) return;
+                                apiFetch(`${API_BASE}/brands`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    domain: newBrandDomain.toLowerCase().trim(),
+                                    brand_name: newBrandName || newBrandDomain.split('.')[0]
+                                  })
+                                }).then((res: any) => {
+                                  if (!res.ok) {
+                                    res.json().catch(() => ({})).then((err: any) => {
+                                      alert(err.error || `Failed to add brand (HTTP ${res.status})`);
+                                    });
+                                    return;
+                                  }
+                                  loadBrands();
+                                  setNewBrandDomain('');
+                                  setNewBrandName('');
+                                  setShowAddBrand(false);
+                                });
+                              }}
+                            >
+                              <Save className="w-4 h-4 mr-1" /> Save
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => {
+                              setShowAddBrand(false);
+                              setNewBrandDomain('');
+                              setNewBrandName('');
+                            }}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
