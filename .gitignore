@@ -25,10 +25,32 @@ data/
 .DS_Store
 Thumbs.db
 
-# Environment
+# Environment — do NOT commit any file that holds real credentials.
+#
+# COMMITTED env files (whitelisted, must contain only placeholders or already-
+# public NEXT_PUBLIC_* values):
+#   - backend/.env.example          (placeholder template, "change_me")
+#   - frontend/.env.local.example   (dev URL guidance only)
+#   - frontend/.env.production      (NEXT_PUBLIC_API_URL only — baked into
+#                                    client bundle, already public)
+#
+# IGNORED env files (never push to GitHub):
 .env
+.env.*
+!.env.example
+!.env.*.example
+!.env.production
 .env.local
 .env.*.local
+.env.development
+.env.test
+.envrc
+secrets.*
+*.secret
+*credentials*.json
+*.pem
+*.key
+!*.public.key
 
 # Build
 .next/

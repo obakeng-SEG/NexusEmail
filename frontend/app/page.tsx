@@ -1512,277 +1512,257 @@ export default function Dashboard() {
           </div>
         )}
 
-            <TabsContent value="notifications" className="space-y-4">
-              <Card className="border-border/40">
+            <TabsContent value="notifications" className="space-y-6">
+              <div>
+                <p className="eyebrow mb-2">Notifications</p>
+                <h2 className="font-display text-2xl font-bold tracking-tight mb-1">How we reach you</h2>
+                <p className="text-sm text-muted-foreground">
+                  Pick which events trigger an email and where they get delivered. SMTP delivery is configured in Settings.
+                </p>
+              </div>
+
+              <Card className="premium-surface premium-card border-0">
                 <CardHeader>
-                  <CardTitle>SMTP Configuration</CardTitle>
-                  <CardDescription>Configure email delivery for notifications</CardDescription>
+                  <CardTitle className="font-display tracking-tight">Notification preferences</CardTitle>
+                  <CardDescription>Toggle which events generate an outbound email.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">SMTP Host</label>
-                      <Input value={smtpForm.host} onChange={(e) => setSmtpForm({...smtpForm, host: e.target.value})} placeholder="smtp.example.com" className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Port</label>
-                      <Input value={smtpForm.port} onChange={(e) => setSmtpForm({...smtpForm, port: e.target.value})} placeholder="587" className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Username</label>
-                      <Input value={smtpForm.user} onChange={(e) => setSmtpForm({...smtpForm, user: e.target.value})} placeholder="user@example.com" className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Password</label>
-                      <Input type="password" value={smtpForm.pass} onChange={(e) => setSmtpForm({...smtpForm, pass: e.target.value})} placeholder="••••••••" className="mt-1" />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">From Email</label>
-                      <Input value={smtpForm.from} onChange={(e) => setSmtpForm({...smtpForm, from: e.target.value})} placeholder="noreply@yourdomain.com" className="mt-1" />
-                    </div>
-                    <div className="flex items-center">
-                      <label className="flex items-center gap-2 text-sm font-medium">
-                        <input type="checkbox" checked={smtpForm.secure} onChange={(e) => setSmtpForm({...smtpForm, secure: e.target.checked})} className="rounded" />
-                        Use TLS/SSL
-                      </label>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={saveSmtp}>
-                      <Save className="w-4 h-4 mr-2" /> Save SMTP
-                    </Button>
-                    <Button variant="outline" onClick={testSmtp} disabled={testingSmtp}>
-                      {testingSmtp ? 'Testing...' : 'Test'}
-                    </Button>
-                  </div>
+                <CardContent className="space-y-2">
+                  {[
+                    { key: 'scan_completed', label: 'Scan completed', desc: 'Get notified when a domain scan finishes.', icon: CheckCircle },
+                    { key: 'critical_alerts', label: 'Critical alerts', desc: 'Immediate emails for high-severity issues.', icon: AlertTriangle },
+                    { key: 'weekly_report', label: 'Weekly summary', desc: 'A digest of every domain\u2019s posture each week.', icon: BarChart3 },
+                  ].map((pref) => {
+                    const on = !!notifications[pref.key];
+                    return (
+                      <div key={pref.key} className="flex items-center justify-between p-4 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${on ? 'bg-orange-500/15 text-orange-400' : 'bg-white/5 text-muted-foreground'}`}>
+                            <pref.icon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{pref.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{pref.desc}</p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`min-w-[70px] ${on ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25 hover:text-orange-200 border border-orange-500/30' : 'text-muted-foreground border border-white/10 hover:bg-white/5'}`}
+                          onClick={() => saveNotifications(pref.key, !on)}
+                        >
+                          {on ? 'On' : 'Off'}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
 
-              <Card className="border-border/40">
+              <Card className="premium-surface premium-card border-0">
                 <CardHeader>
-                  <CardTitle>Notification Preferences</CardTitle>
+                  <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-orange-400" /> Where to send them
+                  </CardTitle>
+                  <CardDescription>Configure SMTP under <strong>Settings</strong> to enable outbound delivery.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent>
+                  <div className="text-xs text-muted-foreground p-3 rounded-md bg-white/[0.03] border border-white/5 leading-relaxed">
+                    Notifications are dispatched from the platform sender <code className="text-orange-300">noreply@brandprotection.segbytes.co.za</code> by default. To send from your own SMTP / domain, configure credentials under <strong>Settings &rarr; SMTP Configuration</strong>.
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="reports" className="space-y-6">
+              <div className="flex items-end justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="eyebrow mb-2">Reports</p>
+                  <h2 className="font-display text-2xl font-bold tracking-tight mb-1">Generate &amp; export</h2>
+                  <p className="text-sm text-muted-foreground">Per-domain HTML reports for stakeholders. Bulk CSV / JSON exports for archive.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={exportCSV}>
+                    <Download className="w-4 h-4 mr-2" /> Export all (CSV)
+                  </Button>
+                  <Button variant="outline" className="border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={exportJSON}>
+                    <Download className="w-4 h-4 mr-2" /> Export all (JSON)
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <Card className="premium-surface premium-card border-0">
+                  <CardHeader>
+                    <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-orange-400" /> Single domain report
+                    </CardTitle>
+                    <CardDescription>Detailed HTML breakdown of one domain&rsquo;s SPF / DKIM / DMARC posture.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <select
+                      className="w-full h-10 px-3 rounded-md border border-white/10 bg-background/50 text-sm focus-visible:outline-none focus-visible:border-orange-500/40"
+                      value={reportDomainId || ''}
+                      onChange={(e) => setReportDomainId(Number(e.target.value))}
+                    >
+                      <option value="">Select a domain&hellip;</option>
+                      {domains.map((d: any) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    <Button
+                      className="w-full btn-premium-primary border-0"
+                      onClick={() => reportDomainId && generateReport(reportDomainId)}
+                      disabled={!reportDomainId || generatingReport}
+                    >
+                      {generatingReport ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Generating&hellip;</> : <><FileText className="w-4 h-4 mr-2" /> Generate report</>}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="premium-surface premium-card border-0">
+                  <CardHeader>
+                    <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                      <Download className="w-4 h-4 text-orange-400" /> Bulk export
+                    </CardTitle>
+                    <CardDescription>Download every domain&rsquo;s latest scan as a single archive.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <Button variant="outline" className="w-full border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={exportCSV}>
+                      <Download className="w-4 h-4 mr-2" /> CSV &mdash; spreadsheet-friendly
+                    </Button>
+                    <Button variant="outline" className="w-full border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={exportJSON}>
+                      <Download className="w-4 h-4 mr-2" /> JSON &mdash; full structured data
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="settings" className="space-y-6">
+              <div>
+                <p className="eyebrow mb-2">Settings</p>
+                <h2 className="font-display text-2xl font-bold tracking-tight mb-1">Operational defaults</h2>
+                <p className="text-sm text-muted-foreground">Scanning cadence, auto-remediation policy, outbound SMTP, and connected DNS providers.</p>
+              </div>
+
+              <Card className="premium-surface premium-card border-0">
+                <CardHeader>
+                  <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-orange-400" /> Scanning
+                  </CardTitle>
+                  <CardDescription>How and when domains get re-scanned.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
                   {[
-                    { key: 'scan_completed', label: 'Scan completed notifications', desc: 'Get notified when scans complete' },
-                    { key: 'critical_alerts', label: 'Critical security alerts', desc: 'Immediate alerts for high severity issues' },
-                    { key: 'weekly_report', label: 'Weekly summary report', desc: 'Receive weekly security summary' },
-                  ].map((pref) => (
-                    <div key={pref.key} className="flex items-center justify-between">
+                    { key: 'autoOnAdd', label: 'Auto-scan on add', desc: 'Run a scan immediately when a new domain is added.', on: !!settings?.scan_schedule?.enabled, fn: () => toggleSchedule(!settings?.scan_schedule?.enabled) },
+                    { key: 'daily', label: 'Daily scheduled scan', desc: 'Re-scan every domain at 02:00 UTC.', on: !!settings?.scan_schedule?.enabled, fn: () => toggleSchedule(!settings?.scan_schedule?.enabled) },
+                  ].map((s) => (
+                    <div key={s.key} className="flex items-center justify-between p-4 rounded-lg border border-white/5 bg-white/[0.02]">
                       <div>
-                        <p className="font-medium">{pref.label}</p>
-                        <p className="text-sm text-muted-foreground">{pref.desc}</p>
+                        <p className="font-medium text-sm">{s.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
                       </div>
-                      <Button 
-                        variant={notifications[pref.key] ? "default" : "outline"} 
-                        size="sm" 
-                        onClick={() => saveNotifications(pref.key, !notifications[pref.key])}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`min-w-[78px] ${s.on ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25 border border-orange-500/30' : 'text-muted-foreground border border-white/10 hover:bg-white/5'}`}
+                        onClick={s.fn}
                       >
-                        {notifications[pref.key] ? 'On' : 'Off'}
+                        {s.on ? 'Enabled' : 'Disabled'}
                       </Button>
                     </div>
                   ))}
                 </CardContent>
               </Card>
-            </TabsContent>
 
-            <TabsContent value="reports" className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Generate Reports</h2>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={exportCSV}>
-                    <Download className="w-4 h-4 mr-2" /> Export CSV
-                  </Button>
-                  <Button variant="outline" onClick={exportJSON}>
-                    <Download className="w-4 h-4 mr-2" /> Export JSON
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <Card className="border-border/40">
-                  <CardHeader>
-                    <CardTitle>Single Domain Report</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">Generate detailed HTML report for a specific domain</p>
-                    <div className="space-y-2">
-                      <select 
-                        className="w-full p-2 rounded border bg-background"
-                        value={reportDomainId || ''}
-                        onChange={(e) => setReportDomainId(Number(e.target.value))}
-                      >
-                        <option value="">Select domain...</option>
-                        {domains.map((d: any) => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                      </select>
-                      <Button 
-                        className="w-full" 
-                        onClick={() => reportDomainId && generateReport(reportDomainId)}
-                        disabled={!reportDomainId || generatingReport}
-                      >
-                        {generatingReport ? 'Generating...' : 'Generate Report'}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border/40">
-                  <CardHeader>
-                    <CardTitle>Bulk Export</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">Export all domain data as CSV or JSON</p>
-                    <div className="space-y-2">
-                      <Button variant="outline" className="w-full" onClick={exportCSV}>
-                        <Download className="w-4 h-4 mr-2" /> Download CSV
-                      </Button>
-                      <Button variant="outline" className="w-full" onClick={exportJSON}>
-                        <Download className="w-4 h-4 mr-2" /> Download JSON
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="settings" className="space-y-4">
-              <Card className="border-border/40">
+              <Card className="premium-surface premium-card border-0">
                 <CardHeader>
-                  <CardTitle>Scan Settings</CardTitle>
+                  <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-orange-400" /> Auto-remediation
+                  </CardTitle>
+                  <CardDescription>When a connected DNS provider can patch SPF / DMARC, do it automatically.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
+                <CardContent>
+                  <div className="flex items-center justify-between p-4 rounded-lg border border-white/5 bg-white/[0.02]">
                     <div>
-                      <p className="font-medium">Auto-scan on add</p>
-                      <p className="text-sm text-muted-foreground">Automatically scan new domains</p>
+                      <p className="font-medium text-sm">Auto-fix issues</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Apply recommended record changes via your DNS provider integration.</p>
                     </div>
-                    <Button variant={settings?.scan_schedule?.enabled ? "default" : "outline"} size="sm" onClick={() => toggleSchedule(!settings?.scan_schedule?.enabled)}>
-                      {settings?.scan_schedule?.enabled ? 'Enabled' : 'Disabled'}
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Scheduled scans</p>
-                      <p className="text-sm text-muted-foreground">Daily at 2:00 AM UTC</p>
-                    </div>
-                    <Button variant={settings?.scan_schedule?.enabled ? "default" : "outline"} size="sm" onClick={() => toggleSchedule(!settings?.scan_schedule?.enabled)}>
-                      {settings?.scan_schedule?.enabled ? 'Daily' : 'Off'}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/40">
-                <CardHeader>
-                  <CardTitle>Auto-Remediation</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Auto-fix issues</p>
-                      <p className="text-sm text-muted-foreground">Automatically apply recommended fixes</p>
-                    </div>
-                    <Button variant={settings?.auto_remediation ? "default" : "outline"} size="sm" onClick={() => toggleAutoRemediation(!settings?.auto_remediation)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={`min-w-[78px] ${settings?.auto_remediation ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25 border border-orange-500/30' : 'text-muted-foreground border border-white/10 hover:bg-white/5'}`}
+                      onClick={() => toggleAutoRemediation(!settings?.auto_remediation)}
+                    >
                       {settings?.auto_remediation ? 'Enabled' : 'Disabled'}
                     </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-border/40">
+              <Card className="premium-surface premium-card border-0">
                 <CardHeader>
-                  <CardTitle>Email Notifications</CardTitle>
+                  <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-orange-400" /> SMTP configuration
+                  </CardTitle>
+                  <CardDescription>Outbound delivery for scan completion, alerts, weekly digests, and takedown emails.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="grid sm:grid-cols-2 gap-4">
                     <div>
-                      <p className="font-medium">Scan completed</p>
-                      <p className="text-sm text-muted-foreground">Notify when domain scan finishes</p>
-                    </div>
-                    <Button variant={notifications.notify_scan_completed ? "default" : "outline"} size="sm" onClick={() => saveNotifications('scan_completed', !notifications.notify_scan_completed)}>
-                      {notifications.notify_scan_completed ? 'On' : 'Off'}
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Critical alerts</p>
-                      <p className="text-sm text-muted-foreground">Notify on critical security issues</p>
-                    </div>
-                    <Button variant={notifications.notify_critical_alerts ? "default" : "outline"} size="sm" onClick={() => saveNotifications('critical_alerts', !notifications.notify_critical_alerts)}>
-                      {notifications.notify_critical_alerts ? 'On' : 'Off'}
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Weekly report</p>
-                      <p className="text-sm text-muted-foreground">Receive weekly security summary</p>
-                    </div>
-                    <Button variant={notifications.notify_weekly_report ? "default" : "outline"} size="sm" onClick={() => saveNotifications('weekly_report', !notifications.notify_weekly_report)}>
-                      {notifications.notify_weekly_report ? 'On' : 'Off'}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/40">
-                <CardHeader>
-                  <CardTitle>SMTP Configuration</CardTitle>
-                  <CardDescription>Configure email delivery for notifications</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium">SMTP Host</label>
-                      <Input value={smtpForm.host} onChange={(e) => setSmtpForm({...smtpForm, host: e.target.value})} placeholder="smtp.example.com" className="mt-1" />
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">SMTP host</label>
+                      <Input value={smtpForm.host} onChange={(e) => setSmtpForm({...smtpForm, host: e.target.value})} placeholder="smtp.example.com" className="mt-1.5 bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm" />
                     </div>
                     <div>
-                      <label className="text-sm font-medium">Port</label>
-                      <Input value={smtpForm.port} onChange={(e) => setSmtpForm({...smtpForm, port: e.target.value})} placeholder="587" className="mt-1" />
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Port</label>
+                      <Input value={smtpForm.port} onChange={(e) => setSmtpForm({...smtpForm, port: e.target.value})} placeholder="587" className="mt-1.5 bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm" />
                     </div>
                     <div>
-                      <label className="text-sm font-medium">Username</label>
-                      <Input value={smtpForm.user} onChange={(e) => setSmtpForm({...smtpForm, user: e.target.value})} placeholder="user@example.com" className="mt-1" />
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Username</label>
+                      <Input value={smtpForm.user} onChange={(e) => setSmtpForm({...smtpForm, user: e.target.value})} placeholder="user@example.com" className="mt-1.5 bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm" />
                     </div>
                     <div>
-                      <label className="text-sm font-medium">Password</label>
-                      <Input type="password" value={smtpForm.pass} onChange={(e) => setSmtpForm({...smtpForm, pass: e.target.value})} placeholder="••••••••" className="mt-1" />
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Password</label>
+                      <Input type="password" value={smtpForm.pass} onChange={(e) => setSmtpForm({...smtpForm, pass: e.target.value})} placeholder="••••••••" className="mt-1.5 bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm" />
                     </div>
-                    <div className="col-span-2">
-                      <label className="text-sm font-medium">From Email</label>
-                      <Input value={smtpForm.from} onChange={(e) => setSmtpForm({...smtpForm, from: e.target.value})} placeholder="noreply@yourdomain.com" className="mt-1" />
+                    <div className="sm:col-span-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">From email</label>
+                      <Input value={smtpForm.from} onChange={(e) => setSmtpForm({...smtpForm, from: e.target.value})} placeholder="noreply@yourdomain.com" className="mt-1.5 bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm" />
                     </div>
-                    <div className="col-span-2">
-                      <label className="flex items-center gap-2 text-sm font-medium">
-                        <input type="checkbox" checked={smtpForm.secure} onChange={(e) => setSmtpForm({...smtpForm, secure: e.target.checked})} className="rounded" />
-                        Use TLS/SSL
+                    <div className="sm:col-span-2">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                        <input type="checkbox" checked={smtpForm.secure} onChange={(e) => setSmtpForm({...smtpForm, secure: e.target.checked})} className="accent-orange-500" />
+                        <span>Use TLS / SSL</span>
                       </label>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={saveSmtp}><Save className="w-4 h-4 mr-2" />Save SMTP</Button>
-                    <Button variant="outline" onClick={testSmtp} disabled={testingSmtp}>{testingSmtp ? 'Testing...' : 'Test Connection'}</Button>
+                  <div className="flex gap-2 pt-2">
+                    <Button className="btn-premium-primary border-0" onClick={saveSmtp}>
+                      <Save className="w-4 h-4 mr-2" /> Save SMTP
+                    </Button>
+                    <Button variant="outline" className="border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={testSmtp} disabled={testingSmtp}>
+                      {testingSmtp ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Testing&hellip;</> : <><Zap className="w-4 h-4 mr-2" /> Test connection</>}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-border/40">
+              <Card className="premium-surface premium-card border-0">
                 <CardHeader>
-                  <CardTitle>DNS Providers</CardTitle>
-                  <CardDescription>Connected DNS providers for auto-remediation</CardDescription>
+                  <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                    <Plug className="w-4 h-4 text-orange-400" /> Connected DNS providers
+                  </CardTitle>
+                  <CardDescription>Snapshot of providers configured under <strong>Integrations</strong>.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {dnsProviders.map((p: any) => {
                       const creds = settings?.provider_credentials?.[p.name.toLowerCase()];
                       return (
-                        <div key={p.name} className={`p-3 rounded-lg border ${creds ? 'border-emerald-500/50 bg-emerald-500/10' : 'border-border'}`}>
-                          <div className="flex items-center gap-2">
-                            <Server className="w-4 h-4" />
-                            <span className="text-sm font-medium">{p.name}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">{creds ? 'Connected' : 'Not connected'}</p>
+                        <div key={p.name} className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${creds ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-200' : 'border-white/5 bg-white/[0.02] text-muted-foreground'}`}>
+                          <Server className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="truncate">{p.name}</span>
+                          {creds && <CheckCircle className="w-3 h-3 ml-auto text-emerald-400 flex-shrink-0" />}
                         </div>
                       );
                     })}
@@ -1791,26 +1771,34 @@ export default function Dashboard() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="brands" className="space-y-4">
-              <Card className="border-border/40">
-                <CardHeader className="flex flex-row items-center justify-between">
+            <TabsContent value="brands" className="space-y-6">
+              <div>
+                <p className="eyebrow mb-2">Brand Protection</p>
+                <h2 className="font-display text-2xl font-bold tracking-tight mb-1">Watch for impersonation</h2>
+                <p className="text-sm text-muted-foreground">Detect typosquats, look-alikes, and brand abuse on domains you own.</p>
+              </div>
+
+              <Card className="premium-surface premium-card border-0">
+                <CardHeader className="flex flex-row items-center justify-between gap-3">
                   <div>
-                    <CardTitle>Brand Protection</CardTitle>
-                    <CardDescription>Monitor your brand against typosquatting and impersonation</CardDescription>
+                    <CardTitle className="font-display tracking-tight flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-orange-400" /> Monitored brands
+                    </CardTitle>
+                    <CardDescription>Each brand is tied to a verified domain you own.</CardDescription>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-shrink-0">
                     {brandAlerts.length > 0 && (
-                      <Button variant="outline" size="sm" onClick={() => setShowAlertsModal(true)}>
-                        <Bell className="w-4 h-4 mr-1" /> Alerts
-                        <Badge variant="destructive" className="ml-1 text-xs">{brandAlerts.length}</Badge>
+                      <Button variant="outline" size="sm" className="border-red-500/30 bg-red-500/5 text-red-300 hover:bg-red-500/10 hover:border-red-500/50" onClick={() => setShowAlertsModal(true)}>
+                        <Bell className="w-4 h-4 mr-1.5" /> Alerts
+                        <span className="ml-2 px-1.5 py-0.5 rounded-md bg-red-500 text-white text-[10px] font-bold leading-none">{brandAlerts.length}</span>
                       </Button>
                     )}
-                    <Button variant="outline" size="sm" onClick={bulkScanAll} disabled={bulkScanning}>
-                      {bulkScanning ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
-                      Scan All
+                    <Button variant="outline" size="sm" className="border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5" onClick={bulkScanAll} disabled={bulkScanning}>
+                      {bulkScanning ? <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
+                      Scan all
                     </Button>
-                    <Button onClick={() => setShowAddBrand(true)}>
-                      <Plus className="w-4 h-4 mr-2" /> Add Brand
+                    <Button className="btn-premium-primary border-0" size="sm" onClick={() => setShowAddBrand(true)}>
+                      <Plus className="w-4 h-4 mr-1.5" /> Add brand
                     </Button>
                   </div>
                 </CardHeader>
