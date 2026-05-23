@@ -705,67 +705,247 @@ export default function Dashboard() {
   };
 
   const getProviderFields = (providerName: string) => {
-    const fields: Record<string, string[]> = {
-      'Cloudflare': ['api_key', 'email'],
-      'AWS Route53': ['access_key_id', 'secret_access_key', 'region'],
-      'GoDaddy': ['api_key', 'secret'],
-      'DigitalOcean': ['api_token'],
-      'Vercel': ['token'],
-      'Namecheap': ['api_key', 'username', 'ip'],
-      'NameSilo': ['api_key'],
-      'Gandi': ['api_key'],
-      'DNSimple': ['access_token', 'account_id'],
-      'Linode': ['access_token'],
-      'Porkbun': ['api_key', 'secret'],
-      'ClouDNS': ['auth_id', 'auth_password'],
-      'Google Cloud DNS': ['project_id', 'access_token'],
-      'Azure DNS': ['subscription_id', 'resource_group', 'access_token'],
-      'Aliyun': ['access_key_id', 'access_key_secret', 'region'],
-      'DNSPod': ['token'],
-      'NS1': ['api_key'],
-      'Bunny DNS': ['api_key'],
-      'UltraDNS': ['username', 'password'],
-      'EdgeDNS': ['access_token', 'cp_code'],
-      'Hetzner DNS': ['api_token'],
-      'Domains.co.za': ['reseller_id', 'api_key'],
-      'WebAfrica': ['client_code', 'password'],
-      'HostAfrica': ['email', 'password'],
-      'MWeb': ['account_id', 'password'],
-      'Afrihost': ['client_id', 'api_key'],
-      'CoolIdeas': ['account_id', 'api_key']
-    };
-    return fields[providerName] || ['api_key'];
+    return (PROVIDER_METADATA[providerName]?.fields || []).map(f => f.key);
   };
 
-  const dnsProviders = [
-    { name: 'Cloudflare', icon: Server },
-    { name: 'AWS Route53', icon: Server },
-    { name: 'GoDaddy', icon: Server },
-    { name: 'DigitalOcean', icon: Server },
-    { name: 'Vercel', icon: Server },
-    { name: 'Namecheap', icon: Server },
-    { name: 'NameSilo', icon: Server },
-    { name: 'Gandi', icon: Server },
-    { name: 'DNSimple', icon: Server },
-    { name: 'Linode', icon: Server },
-    { name: 'Porkbun', icon: Server },
-    { name: 'ClouDNS', icon: Server },
-    { name: 'Google Cloud DNS', icon: Server },
-    { name: 'Azure DNS', icon: Server },
-    { name: 'Aliyun', icon: Server },
-    { name: 'DNSPod', icon: Server },
-    { name: 'NS1', icon: Server },
-    { name: 'Bunny DNS', icon: Server },
-    { name: 'UltraDNS', icon: Server },
-    { name: 'EdgeDNS', icon: Server },
-    { name: 'Hetzner DNS', icon: Server },
-    { name: 'Domains.co.za', icon: Server },
-    { name: 'WebAfrica', icon: Server },
-    { name: 'HostAfrica', icon: Server },
-    { name: 'MWeb', icon: Server },
-    { name: 'Afrihost', icon: Server },
-    { name: 'CoolIdeas', icon: Server },
-  ];
+  // T160 — Provider metadata is the single source of truth for the
+  // integrations grid AND the configure-provider modal. Only providers with
+  // real DNS-management API endpoints in backend/src/services/providers/index.js
+  // are listed. Registrar-only / no-API providers (Aliyun SDK-required,
+  // Domains.co.za, WebAfrica, HostAfrica, MWeb, Afrihost, CoolIdeas) used to
+  // be in this list but were rendered as stubs that couldn't actually fix
+  // SPF/DMARC records, which was misleading to customers.
+  type ProviderField = {
+    key: string;
+    label: string;
+    placeholder: string;
+    description: string;
+    type: 'text' | 'password';
+    required: boolean;
+  };
+  type ProviderMeta = {
+    category: 'Global' | 'Cloud' | 'Asia';
+    docsUrl: string;
+    summary: string;
+    fields: ProviderField[];
+  };
+  const PROVIDER_METADATA: Record<string, ProviderMeta> = {
+    'Cloudflare': {
+      category: 'Global',
+      docsUrl: 'https://dash.cloudflare.com/profile/api-tokens',
+      summary: 'Edit DNS records via Cloudflare API tokens. Fastest and most reliable.',
+      fields: [
+        { key: 'api_key', label: 'API Token', placeholder: 'cf-...', type: 'password', required: true,
+          description: 'Create a token with Zone:DNS:Edit permission scoped to the relevant zone(s).' },
+        { key: 'email', label: 'Account Email', placeholder: 'you@example.com', type: 'text', required: false,
+          description: 'Optional. Only needed if the token has not yet superseded API-key authentication on legacy accounts.' },
+      ],
+    },
+    'AWS Route53': {
+      category: 'Cloud',
+      docsUrl: 'https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html',
+      summary: 'Edit Route53 hosted-zone records via an IAM access key with Route53 write permissions.',
+      fields: [
+        { key: 'access_key_id', label: 'Access Key ID', placeholder: 'AKIA...', type: 'text', required: true,
+          description: 'IAM user / role access-key ID.' },
+        { key: 'secret_access_key', label: 'Secret Access Key', placeholder: 'wJalrXUtnFEMI/...', type: 'password', required: true,
+          description: 'Corresponding secret. Grant route53:ChangeResourceRecordSets + ListHostedZones.' },
+        { key: 'region', label: 'Region', placeholder: 'us-east-1', type: 'text', required: false,
+          description: 'Defaults to us-east-1. Route53 is global, but the SDK still requires a region.' },
+      ],
+    },
+    'GoDaddy': {
+      category: 'Global',
+      docsUrl: 'https://developer.godaddy.com/keys',
+      summary: 'PUT TXT records via the GoDaddy v1 API.',
+      fields: [
+        { key: 'api_key', label: 'API Key', placeholder: 'gd...', type: 'password', required: true,
+          description: 'Generate a Production key (Test keys cannot edit live DNS).' },
+        { key: 'secret', label: 'API Secret', placeholder: 'paired secret', type: 'password', required: true,
+          description: 'Paired secret issued alongside the API key.' },
+      ],
+    },
+    'DigitalOcean': {
+      category: 'Cloud',
+      docsUrl: 'https://cloud.digitalocean.com/account/api/tokens',
+      summary: 'Edit DNS records on domains managed by DigitalOcean DNS.',
+      fields: [
+        { key: 'api_token', label: 'Personal Access Token', placeholder: 'dop_v1_...', type: 'password', required: true,
+          description: 'Token must have Write scope on the Domains category.' },
+      ],
+    },
+    'Vercel': {
+      category: 'Cloud',
+      docsUrl: 'https://vercel.com/account/tokens',
+      summary: 'Edit DNS records on domains managed by Vercel.',
+      fields: [
+        { key: 'token', label: 'Access Token', placeholder: 'vercel_...', type: 'password', required: true,
+          description: 'Account token with full access to the team / personal scope owning the domain.' },
+      ],
+    },
+    'Namecheap': {
+      category: 'Global',
+      docsUrl: 'https://ap.www.namecheap.com/settings/tools/apiaccess/',
+      summary: 'Edit DNS via the Namecheap XML API. Requires whitelisting your egress IP.',
+      fields: [
+        { key: 'username', label: 'Namecheap Username', placeholder: 'yourhandle', type: 'text', required: true,
+          description: 'Account username (the one that owns the domain).' },
+        { key: 'api_key', label: 'API Key', placeholder: 'a1b2c3...', type: 'password', required: true,
+          description: 'Enable API access on your account first, then copy the key.' },
+        { key: 'ip', label: 'Whitelisted IP', placeholder: 'auto', type: 'text', required: true,
+          description: 'Public IP of the Brand Protection backend. Must be whitelisted in Namecheap API settings.' },
+      ],
+    },
+    'NameSilo': {
+      category: 'Global',
+      docsUrl: 'https://www.namesilo.com/account/api-manager',
+      summary: 'Edit DNS via the NameSilo XML API.',
+      fields: [
+        { key: 'api_key', label: 'API Key', placeholder: 'ns-...', type: 'password', required: true,
+          description: 'Generate from Account → API Manager.' },
+      ],
+    },
+    'Gandi': {
+      category: 'Global',
+      docsUrl: 'https://account.gandi.net/en/users/_/security',
+      summary: 'Edit LiveDNS records via Apikey authentication.',
+      fields: [
+        { key: 'api_key', label: 'API Key', placeholder: 'gandi-...', type: 'password', required: true,
+          description: 'Generate a personal API key under Account → Security.' },
+      ],
+    },
+    'DNSimple': {
+      category: 'Global',
+      docsUrl: 'https://dnsimple.com/user',
+      summary: 'Edit zone records via DNSimple v2 API.',
+      fields: [
+        { key: 'access_token', label: 'Account Access Token', placeholder: 'dnsimple_...', type: 'password', required: true,
+          description: 'Generate from User Settings → Access Tokens. Use an Account-level token.' },
+        { key: 'account_id', label: 'Account ID', placeholder: '12345', type: 'text', required: true,
+          description: 'Numeric ID of your DNSimple account (visible in the URL when logged in).' },
+      ],
+    },
+    'Linode': {
+      category: 'Cloud',
+      docsUrl: 'https://cloud.linode.com/profile/tokens',
+      summary: 'Edit Linode-managed DNS via personal access token.',
+      fields: [
+        { key: 'access_token', label: 'Personal Access Token', placeholder: 'linode_...', type: 'password', required: true,
+          description: 'Scope must include Domains: Read/Write.' },
+      ],
+    },
+    'Porkbun': {
+      category: 'Global',
+      docsUrl: 'https://porkbun.com/account/api',
+      summary: 'Edit DNS via Porkbun JSON API. Enable API access on the domain first.',
+      fields: [
+        { key: 'api_key', label: 'API Key', placeholder: 'pk1_...', type: 'password', required: true,
+          description: 'Enable API access in your account, then copy the key.' },
+        { key: 'secret', label: 'Secret API Key', placeholder: 'sk1_...', type: 'password', required: true,
+          description: 'Paired secret issued alongside the API key.' },
+      ],
+    },
+    'ClouDNS': {
+      category: 'Global',
+      docsUrl: 'https://www.cloudns.net/api-settings/',
+      summary: 'Edit DNS via the ClouDNS API.',
+      fields: [
+        { key: 'auth_id', label: 'Auth ID', placeholder: 'numeric ID', type: 'text', required: true,
+          description: 'Auth-ID issued by ClouDNS for API access. Sub-auth IDs work too.' },
+        { key: 'auth_password', label: 'Auth Password', placeholder: '••••••••', type: 'password', required: true,
+          description: 'Paired password for the auth-ID.' },
+      ],
+    },
+    'Google Cloud DNS': {
+      category: 'Cloud',
+      docsUrl: 'https://cloud.google.com/dns/docs/reference/v1',
+      summary: 'Edit Cloud DNS managed-zone records via OAuth2 access token.',
+      fields: [
+        { key: 'project_id', label: 'GCP Project ID', placeholder: 'my-project-123', type: 'text', required: true,
+          description: 'Project ID hosting the managed zone.' },
+        { key: 'access_token', label: 'OAuth2 Access Token', placeholder: 'ya29...', type: 'password', required: true,
+          description: 'Short-lived bearer token (use a service account with roles/dns.admin and mint via gcloud auth print-access-token).' },
+      ],
+    },
+    'Azure DNS': {
+      category: 'Cloud',
+      docsUrl: 'https://learn.microsoft.com/en-us/azure/dns/dns-sdk',
+      summary: 'Edit Azure DNS zone records via the Azure REST API.',
+      fields: [
+        { key: 'subscription_id', label: 'Subscription ID', placeholder: '00000000-0000-0000-0000-000000000000', type: 'text', required: true,
+          description: 'Azure subscription that contains the DNS zone.' },
+        { key: 'resource_group', label: 'Resource Group', placeholder: 'my-dns-rg', type: 'text', required: true,
+          description: 'Resource group that owns the dnsZones resource.' },
+        { key: 'access_token', label: 'OAuth2 Access Token', placeholder: 'eyJ...', type: 'password', required: true,
+          description: 'Bearer token for management.azure.com (mint via service principal or az account get-access-token).' },
+      ],
+    },
+    'DNSPod': {
+      category: 'Asia',
+      docsUrl: 'https://www.dnspod.cn/console/user/security',
+      summary: 'Edit DNS via the DNSPod (Tencent Cloud) login_token API.',
+      fields: [
+        { key: 'token', label: 'login_token', placeholder: 'id,token', type: 'password', required: true,
+          description: 'Format: <id>,<token>. Generate under Security → API Token in the DNSPod console.' },
+      ],
+    },
+    'NS1': {
+      category: 'Global',
+      docsUrl: 'https://my.nsone.net/#/account/settings',
+      summary: 'Edit NS1 zones via the X-Nsone-Key API.',
+      fields: [
+        { key: 'api_key', label: 'API Key', placeholder: 'ns1-...', type: 'password', required: true,
+          description: 'Generate under Account Settings → API Keys with at least Manage zones permission.' },
+      ],
+    },
+    'Bunny DNS': {
+      category: 'Global',
+      docsUrl: 'https://dash.bunny.net/account/api-key',
+      summary: 'Edit Bunny DNS records via Bearer-token API.',
+      fields: [
+        { key: 'api_key', label: 'API Key', placeholder: 'bunny_...', type: 'password', required: true,
+          description: 'Account-level API key (DNS zones share the account scope).' },
+      ],
+    },
+    'UltraDNS': {
+      category: 'Global',
+      docsUrl: 'https://docs.ultradns.com/',
+      summary: 'Edit UltraDNS zones via Basic-auth REST API.',
+      fields: [
+        { key: 'username', label: 'Username', placeholder: 'your.username', type: 'text', required: true,
+          description: 'UltraDNS portal username with zone-edit privileges.' },
+        { key: 'password', label: 'Password', placeholder: '••••••••', type: 'password', required: true,
+          description: 'Portal password. Recommend dedicating an API user.' },
+      ],
+    },
+    'EdgeDNS': {
+      category: 'Global',
+      docsUrl: 'https://techdocs.akamai.com/edge-dns/reference',
+      summary: 'Edit Akamai EdgeDNS zones via OAuth2 access token.',
+      fields: [
+        { key: 'access_token', label: 'EdgeGrid Access Token', placeholder: 'akab-...', type: 'password', required: true,
+          description: 'Generated via Akamai Control Center → Identity & Access → API Users.' },
+        { key: 'cp_code', label: 'CP Code', placeholder: '12345', type: 'text', required: true,
+          description: 'Customer Profile Code that owns the EdgeDNS zone.' },
+      ],
+    },
+    'Hetzner DNS': {
+      category: 'Cloud',
+      docsUrl: 'https://dns.hetzner.com/settings/api-token',
+      summary: 'Edit Hetzner DNS records via Bearer-token API.',
+      fields: [
+        { key: 'api_token', label: 'API Token', placeholder: 'hetzner_...', type: 'password', required: true,
+          description: 'Generate from DNS Console → Settings → API Tokens.' },
+      ],
+    },
+  };
+
+  const dnsProviders = Object.keys(PROVIDER_METADATA).map(name => ({
+    name,
+    icon: Server,
+    category: PROVIDER_METADATA[name].category,
+    summary: PROVIDER_METADATA[name].summary,
+  }));
 
   if (loading) {
     return (
@@ -1128,95 +1308,163 @@ export default function Dashboard() {
             </TabsContent>
 
             <TabsContent value="integrations" className="space-y-6">
-              <h2 className="text-lg font-semibold">DNS Providers</h2>
-              <p className="text-sm text-muted-foreground">Connect your DNS providers to enable auto-remediation (auto-fix SPF/DMARC records)</p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {dnsProviders.map((provider: any) => {
-                  const isConnected = settings?.provider_credentials?.[provider.name.toLowerCase()];
-                  return (
-                    <Card key={provider.name} className={`border-border/40 ${isConnected ? 'border-emerald-500/50 bg-emerald-500/5' : ''}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
-                              <provider.icon className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <span className="font-medium">{provider.name}</span>
-                              {isConnected && (
-                                <p className="text-xs text-emerald-500">Connected</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        {isConnected ? (
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              className="flex-1 text-xs"
-                              onClick={() => testProviderConnection(provider)}
-                            >
-                              Test
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="text-xs text-red-500"
-                              onClick={() => disconnectProvider(provider.name)}
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="w-full text-xs"
-                            onClick={() => openProviderModal(provider)}
-                          >
-                            Configure
-                          </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div>
+                <p className="eyebrow mb-2">Integrations</p>
+                <h2 className="font-display text-2xl font-bold tracking-tight mb-1">DNS Providers</h2>
+                <p className="text-sm text-muted-foreground">
+                  Connect your DNS host so we can auto-remediate SPF / DMARC / DKIM records on your behalf.
+                  Only providers below have a real API and an active integration in this build.
+                </p>
               </div>
+
+              {(['Global', 'Cloud', 'Asia'] as const).map((category) => {
+                const providersInCategory = dnsProviders.filter((p: any) => p.category === category);
+                if (providersInCategory.length === 0) return null;
+                return (
+                  <div key={category} className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground tracking-wide uppercase">{category}</h3>
+                      <div className="hairline flex-1" />
+                      <span className="text-xs text-muted-foreground">{providersInCategory.length} providers</span>
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {providersInCategory.map((provider: any) => {
+                        const isConnected = settings?.provider_credentials?.[provider.name.toLowerCase()];
+                        const meta = PROVIDER_METADATA[provider.name];
+                        const requiredCount = meta?.fields.filter((f: ProviderField) => f.required).length || 0;
+                        return (
+                          <Card key={provider.name} className={`premium-card border ${isConnected ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-white/5 bg-white/[0.02]'}`}>
+                            <CardContent className="p-5">
+                              <div className="flex items-start justify-between mb-3 gap-3">
+                                <div className="flex items-start gap-3 min-w-0">
+                                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-muted-foreground'}`}>
+                                    <provider.icon className="w-5 h-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-display font-semibold tracking-tight truncate">{provider.name}</p>
+                                    {isConnected ? (
+                                      <p className="text-xs text-emerald-400 flex items-center gap-1 mt-0.5">
+                                        <CheckCircle className="w-3 h-3" /> Connected
+                                      </p>
+                                    ) : (
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        {requiredCount} field{requiredCount === 1 ? '' : 's'} required
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-3 line-clamp-2 leading-relaxed">
+                                {provider.summary}
+                              </p>
+                              {isConnected ? (
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1 text-xs h-8 border-white/10"
+                                    onClick={() => testProviderConnection(provider)}
+                                  >
+                                    Test connection
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-xs h-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                    onClick={() => disconnectProvider(provider.name)}
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs h-8 border-white/10 hover:border-orange-500/40 hover:bg-orange-500/5"
+                                  onClick={() => openProviderModal(provider)}
+                                >
+                                  Configure
+                                </Button>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </TabsContent>
 
         {showProviderModal && selectedProvider && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowProviderModal(false)}>
-            <div className="bg-background border rounded-lg w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">Configure {selectedProvider.name}</h3>
-                <Button variant="ghost" size="sm" onClick={() => setShowProviderModal(false)}>
-                  <XCircle className="w-5 h-5" />
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowProviderModal(false)}>
+            <div className="premium-surface rounded-2xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start justify-between mb-1 gap-3">
+                <div className="min-w-0">
+                  <p className="eyebrow mb-1">Connect provider</p>
+                  <h3 className="font-display text-xl font-bold tracking-tight">{selectedProvider.name}</h3>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 -mt-1" onClick={() => setShowProviderModal(false)}>
+                  <X className="w-4 h-4" />
                 </Button>
               </div>
-              
-              <p className="text-sm text-muted-foreground mb-4">
-                Enter your {selectedProvider.name} API credentials to enable auto-remediation.
+              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                {PROVIDER_METADATA[selectedProvider.name]?.summary}
               </p>
 
-              <div className="space-y-3">
-                {getProviderFields(selectedProvider.name).map((field: string) => (
-                  <div key={field}>
-                    <label className="text-sm font-medium capitalize">{field.replace(/_/g, ' ')}</label>
-                    <Input 
-                      type={field.includes('key') || field.includes('secret') || field.includes('token') ? 'password' : 'text'}
-                      value={providerCreds[field] || ''} 
-                      onChange={(e) => setProviderCreds({...providerCreds, [field]: e.target.value})}
-                      placeholder={`Enter ${field.replace(/_/g, ' ')}`}
-                      className="mt-1"
+              <div className="space-y-4">
+                {(PROVIDER_METADATA[selectedProvider.name]?.fields || []).map((field: ProviderField) => (
+                  <div key={field.key}>
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <label className="text-sm font-semibold text-foreground">
+                        {field.label}
+                        {field.required ? (
+                          <span className="ml-1.5 text-orange-400" title="Required">*</span>
+                        ) : (
+                          <span className="ml-1.5 text-xs text-muted-foreground font-normal">(optional)</span>
+                        )}
+                      </label>
+                    </div>
+                    <Input
+                      type={field.type}
+                      value={providerCreds[field.key] || ''}
+                      onChange={(e) => setProviderCreds({...providerCreds, [field.key]: e.target.value})}
+                      placeholder={field.placeholder}
+                      className="bg-background/50 border-white/10 focus-visible:border-orange-500/40 font-mono text-sm"
+                      autoComplete="off"
+                      spellCheck={false}
                     />
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{field.description}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="flex gap-2 mt-4">
-                <Button onClick={saveProviderCredentials} disabled={savingProvider}>
-                  {savingProvider ? 'Saving...' : 'Save'}
+              <div className="mt-5 p-3 rounded-md bg-white/[0.03] border border-white/5 flex items-start gap-3">
+                <i className="text-muted-foreground mt-0.5"><Key className="w-4 h-4" /></i>
+                <div className="flex-1 text-xs text-muted-foreground leading-relaxed">
+                  Need an API key? <a
+                    href={PROVIDER_METADATA[selectedProvider.name]?.docsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-orange-400 hover:text-orange-300 underline underline-offset-2"
+                  >
+                    Open {selectedProvider.name} API settings
+                  </a>. Credentials are stored encrypted at rest, scoped to this tenant only.
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-5">
+                <Button
+                  className="btn-premium-primary border-0"
+                  onClick={saveProviderCredentials}
+                  disabled={
+                    savingProvider ||
+                    !!(PROVIDER_METADATA[selectedProvider.name]?.fields || [])
+                      .filter((f: ProviderField) => f.required)
+                      .find((f: ProviderField) => !providerCreds[f.key]?.trim())
+                  }
+                >
+                  {savingProvider ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving…</> : <><CheckCircle className="w-4 h-4 mr-2" /> Save credentials</>}
                 </Button>
                 <Button variant="ghost" onClick={() => setShowProviderModal(false)}>Cancel</Button>
               </div>
