@@ -80,19 +80,19 @@ export default function Dashboard() {
       ...(options.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     }
-  }).then(async (res) => {
-    // T163 — if our session is invalid/expired, clear local state and bounce
-    // back to the login flow rather than silently swallowing the failure
-    // and leaving the UI empty (which is what made it look like data
-    // disappeared).
-    if (res.status === 401) {
-      localStorage.removeItem('nexusemail_token');
-      localStorage.removeItem('nexusemail_user');
-      setToken(null);
-      setUser(null);
-    }
-    return res;
   });
+
+  // T163b — explicit, narrow logout on detected stale session. Called only by
+  // load* handlers when they see a 401 against an authenticated endpoint —
+  // not from inside apiFetch itself, because apiFetch is also used by the
+  // login flow (where a 401 from /auth/login is the normal "wrong password"
+  // path and must NOT trigger session reset).
+  const handleAuthFailure = () => {
+    localStorage.removeItem('nexusemail_token');
+    localStorage.removeItem('nexusemail_user');
+    setToken(null);
+    setUser(null);
+  };
 
   // Load local session or consume a short-lived WHMCS handoff token.
   useEffect(() => {
@@ -297,12 +297,12 @@ export default function Dashboard() {
   const loadDomains = async () => {
     try {
       const res = await apiFetch(`${API_BASE}/domains`);
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
       if (!res.ok) {
-        // 401 already handled by apiFetch; for other errors, surface them
-        // instead of leaving setDomains([]) which looks like data loss.
-        if (res.status !== 401) {
-          console.error(`Failed to load domains: HTTP ${res.status}`);
-        }
+        console.error(`Failed to load domains: HTTP ${res.status}`);
         return;
       }
       const data = await res.json();
