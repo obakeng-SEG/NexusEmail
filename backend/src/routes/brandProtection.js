@@ -2,11 +2,18 @@ const express = require('express');
 const router = express.Router();
 const { BrandProtectionService } = require('../services/brandProtection');
 const db = require('../db/database');
-const { nextNumericId } = db;
 
 const brandService = new BrandProtectionService();
 
-// Brand protection settings
+// T162 — Brand Protection routes now use the relational tables (brands /
+// brand_threats / brand_takedowns / brand_takedown_replies /
+// brand_safe_entries / brand_alerts) added in this same change.
+//
+// API response shape is preserved: each brand object still contains nested
+// threats[], takedowns[] (with replies[]), and safe_list[], so the frontend
+// doesn't need to change. Hydration happens server-side via getBrandFull /
+// getBrandsFull, which join the relational tables.
+
 router.get('/settings', (req, res) => {
   res.json({
     reply_to: db.getSetting('brand_protection_reply_to', req.orgId) || 'legal@yourcompany.com'
@@ -22,211 +29,141 @@ router.put('/settings', (req, res) => {
 });
 
 router.get('/', (req, res) => {
-  const brands = db.getSetting('monitored_brands', req.orgId) || '[]';
-  res.json(JSON.parse(brands));
+  res.json(db.getBrandsFull(req.orgId));
 });
 
 router.post('/', (req, res) => {
   const { domain, brand_name } = req.body;
-  
   if (!domain) {
     return res.status(400).json({ error: 'Domain is required' });
   }
-
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  
-  const newBrand = {
-    id: nextNumericId(),
-    domain: domain.toLowerCase(),
-    brand_name: brand_name || domain.split('.')[0],
-    added_at: new Date().toISOString(),
-    status: 'active',
-    threats: [],
-    takedowns: [],
-    safe_list: [],
-    last_scan: null,
-    next_scan: null,
-    scan_schedule: 'manual',
-    alerts_enabled: true,
-    last_results: null
-  };
-  
-  brands.push(newBrand);
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
-  
-  res.json({ success: true, ...newBrand });
+  const created = db.addBrand({ domain, brand_name }, req.orgId);
+  res.json({ success: true, ...created, threats: [], takedowns: [], safe_list: [] });
 });
 
 router.post('/scan/all', async (req, res) => {
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
+  const brands = db.getBrandsFull(req.orgId);
   const results = [];
-  
+
   for (const brand of brands) {
     try {
       const previousResults = brand.last_results;
       const result = await brandService.checkBrandProtection(brand.domain, previousResults);
       result.brand_id = brand.id;
       results.push(result);
-      
-      const brandIndex = brands.findIndex(b => b.id === brand.id);
-      if (brandIndex !== -1) {
-        brands[brandIndex].last_scan = new Date().toISOString();
-        brands[brandIndex].last_results = result;
-        
-        if (result.newThreats && result.newThreats.length > 0 && brands[brandIndex].alerts_enabled) {
-          const alerts = JSON.parse(db.getSetting('brand_alerts', req.orgId) || '[]');
-          for (const alert of result.alerts) {
-            alerts.push({ ...alert, brand_id: brand.id, brand_name: brand.domain });
-          }
-          db.setSetting('brand_alerts', JSON.stringify(alerts.slice(-100)), req.orgId);
+
+      db.updateBrand(brand.id, {
+        last_scan: new Date().toISOString(),
+        last_results: result,
+      }, req.orgId);
+
+      if (result.newThreats && result.newThreats.length > 0 && brand.alerts_enabled) {
+        for (const alert of (result.alerts || [])) {
+          db.addBrandAlert({ ...alert, brand_id: brand.id, brand_name: brand.domain }, req.orgId);
         }
       }
     } catch (e) {
       results.push({ domain: brand.domain, error: e.message, brand_id: brand.id });
     }
   }
-  
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
+
   res.json({ scanned: brands.length, results });
 });
 
 router.post('/check/:id', async (req, res) => {
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brand = brands.find(b => b.id === parseInt(req.params.id));
-  
-  if (!brand) {
-    return res.status(404).json({ error: 'Brand not found' });
+  const brand = db.getBrandFull(parseInt(req.params.id), req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
+  const result = await brandService.checkBrandProtection(brand.domain, brand.last_results);
+
+  db.updateBrand(brand.id, {
+    last_scan: new Date().toISOString(),
+    last_results: result,
+  }, req.orgId);
+
+  if (result.newThreats && result.newThreats.length > 0 && brand.alerts_enabled) {
+    for (const alert of (result.alerts || [])) {
+      db.addBrandAlert({ ...alert, brand_id: brand.id, brand_name: brand.domain }, req.orgId);
+    }
   }
 
-  const previousResults = brand.last_results;
-  const result = await brandService.checkBrandProtection(brand.domain, previousResults);
-  
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  brands[brandIndex].last_scan = new Date().toISOString();
-  brands[brandIndex].last_results = result;
-  
-  if (result.newThreats && result.newThreats.length > 0 && brands[brandIndex].alerts_enabled) {
-    const alerts = JSON.parse(db.getSetting('brand_alerts', req.orgId) || '[]');
-    for (const alert of result.alerts) {
-      alerts.push({ ...alert, brand_id: brand.id, brand_name: brand.domain });
-    }
-    db.setSetting('brand_alerts', JSON.stringify(alerts.slice(-100)), req.orgId);
-  }
-  
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
   res.json(result);
 });
 
 // Alerts routes (must be before /:id)
 router.get('/alerts', (req, res) => {
-  const alerts = db.getSetting('brand_alerts', req.orgId) || '[]';
-  const allAlerts = JSON.parse(alerts);
-  res.json(allAlerts.slice(-50).reverse());
+  res.json(db.getBrandAlerts(req.orgId, 50));
 });
 
 router.delete('/alerts/:alertId', (req, res) => {
-  const alerts = JSON.parse(db.getSetting('brand_alerts', req.orgId) || '[]');
-  const filtered = alerts.filter(a => a.id !== parseInt(req.params.alertId));
-  db.setSetting('brand_alerts', JSON.stringify(filtered), req.orgId);
+  db.deleteBrandAlert(parseInt(req.params.alertId), req.orgId);
   res.json({ success: true });
 });
 
 router.post('/alerts/clear', (req, res) => {
-  db.setSetting('brand_alerts', JSON.stringify([]), req.orgId);
+  db.clearBrandAlerts(req.orgId);
   res.json({ success: true, message: 'All alerts cleared' });
 });
 
 router.get('/:id', (req, res) => {
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brand = brands.find(b => b.id === parseInt(req.params.id));
-  
-  if (!brand) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
+  const brand = db.getBrandFull(parseInt(req.params.id), req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
   res.json(brand);
 });
 
 router.patch('/:id', (req, res) => {
   const { scan_schedule, alerts_enabled, brand_name } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (scan_schedule !== undefined) brands[brandIndex].scan_schedule = scan_schedule;
-  if (alerts_enabled !== undefined) brands[brandIndex].alerts_enabled = alerts_enabled;
-  if (brand_name) brands[brandIndex].brand_name = brand_name;
-  
+  const updates = {};
+  if (scan_schedule !== undefined) updates.scan_schedule = scan_schedule;
+  if (alerts_enabled !== undefined) updates.alerts_enabled = alerts_enabled;
+  if (brand_name) updates.brand_name = brand_name;
+
   if (scan_schedule && scan_schedule !== 'manual') {
     const interval = { daily: 1, weekly: 7, monthly: 30 }[scan_schedule];
-    brands[brandIndex].next_scan = new Date(Date.now() + interval * 24 * 60 * 60 * 1000).toISOString();
+    if (interval) {
+      updates.next_scan = new Date(Date.now() + interval * 24 * 60 * 60 * 1000).toISOString();
+    }
   }
-  
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
-  res.json({ success: true, ...brands[brandIndex] });
+
+  const updated = db.updateBrand(parseInt(req.params.id), updates, req.orgId);
+  if (!updated) return res.status(404).json({ error: 'Brand not found' });
+  res.json({ success: true, ...updated });
 });
 
 router.post('/:id/safe', (req, res) => {
   const { domain } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (!brands[brandIndex].safe_list) brands[brandIndex].safe_list = [];
-  if (!brands[brandIndex].safe_list.includes(domain)) {
-    brands[brandIndex].safe_list.push(domain);
-  }
-  
-  if (brands[brandIndex].threats) {
-    brands[brandIndex].threats = brands[brandIndex].threats.filter((t) => t.domain !== domain);
-  }
-  
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
+  const brandId = parseInt(req.params.id);
+  const brand = db.getBrand(brandId, req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
+  db.addSafeEntry(brandId, domain, req.orgId);
+  // Auto-purge any existing threats for this domain on this brand
+  db.deleteBrandThreatByDomain(brandId, domain, req.orgId);
+
   res.json({ success: true, message: `Added ${domain} to safe list` });
 });
 
 router.delete('/:id/safe', (req, res) => {
   const { domain } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (brands[brandIndex].safe_list) {
-    brands[brandIndex].safe_list = brands[brandIndex].safe_list.filter((d) => d !== domain);
-  }
-  
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
+  const brandId = parseInt(req.params.id);
+  const brand = db.getBrand(brandId, req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
+  db.removeSafeEntry(brandId, domain, req.orgId);
   res.json({ success: true });
 });
 
 router.post('/:id/takedown', async (req, res) => {
   const { domain, threat_type, evidence, contact_email } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (!brands[brandIndex].takedowns) brands[brandIndex].takedowns = [];
-  
-  const brand = brands[brandIndex];
-  
+  const brandId = parseInt(req.params.id);
+  const brand = db.getBrand(brandId, req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
   // Lookup registrar for the BAD domain (not the brand)
   const domainRegistrar = await brandService.getRegistrarInfo(domain);
   const registrar = domainRegistrar.registrar ? domainRegistrar : { registrar: 'Unknown', abuse_email: null };
-  
-  const takedown = {
-    id: nextNumericId(),
+
+  const baseTakedown = {
     domain,
     threat_type: threat_type || 'impersonation',
     evidence: evidence || {},
@@ -242,171 +179,107 @@ router.post('/:id/takedown', async (req, res) => {
 
   // Try to send email via SMTP
   const senderEmail = contact_email || 'legal@yourcompany.com';
-  
+
   if (registrar.abuse_email) {
     try {
       const { NotificationService } = require('../services/notifications');
       const notifService = new NotificationService();
-      
-      // Load SMTP config from database
       const smtpConfig = JSON.parse(db.getSetting('smtp_config', req.orgId) || '{}');
-      
+
       if (smtpConfig.host && smtpConfig.host.trim()) {
         notifService.configureSMTP(smtpConfig);
-        
-        // Send TO registrar, BCC to sender (copy)
         const emailResult = await notifService.sendNotification(
           registrar.abuse_email,
           `[Brand Abuse Report] ${domain} - ${threat_type || 'Impersonation'}`,
-          takedown.email_template,
-          { 
-            replyTo: senderEmail,
-            cc: senderEmail  // Send copy to sender
-          }
+          baseTakedown.email_template,
+          { replyTo: senderEmail, cc: senderEmail }
         );
-        
         if (emailResult.success) {
-          takedown.sent = true;
-          takedown.status = 'sent';
-          takedown.sent_at = new Date().toISOString();
-          takedown.sender_email = senderEmail;
+          baseTakedown.sent = true;
+          baseTakedown.status = 'sent';
+          baseTakedown.sent_at = new Date().toISOString();
+          baseTakedown.sender_email = senderEmail;
         }
       }
     } catch (e) {
       console.error('Failed to send takedown email:', e.message);
     }
   }
-  
-  brands[brandIndex].takedowns.push(takedown);
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
-  
+
+  const takedown = db.addBrandTakedown(baseTakedown, brandId, req.orgId);
   res.json({ success: true, takedown_id: takedown.id, takedown });
 });
 
 router.get('/:id/takedowns', (req, res) => {
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brand = brands.find(b => b.id === parseInt(req.params.id));
-  
-  if (!brand) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  res.json(brand.takedowns || []);
+  const brand = db.getBrand(parseInt(req.params.id), req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+  res.json(db.getBrandTakedowns(brand.id, req.orgId));
 });
 
 // Add reply to takedown
 router.post('/:id/takedown/:takedownId/reply', (req, res) => {
   const { from, subject, body, direction } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (brands[brandIndex].takedowns) {
-    const takedownIndex = brands[brandIndex].takedowns.findIndex((t) => t.id === parseInt(req.params.takedownId));
-    if (takedownIndex !== -1) {
-      const reply = {
-        id: nextNumericId(),
-        from,
-        subject: subject || '',
-        body,
-        direction: direction || 'incoming',
-        timestamp: new Date().toISOString()
-      };
-      
-      if (!brands[brandIndex].takedowns[takedownIndex].replies) {
-        brands[brandIndex].takedowns[takedownIndex].replies = [];
-      }
-      brands[brandIndex].takedowns[takedownIndex].replies.push(reply);
-      
-      // Update status if first incoming reply
-      if (direction === 'incoming' && brands[brandIndex].takedowns[takedownIndex].status === 'sent') {
-        brands[brandIndex].takedowns[takedownIndex].status = 'waiting_response';
-      }
-      
-      db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
-      return res.json({ success: true, reply });
+  const brandId = parseInt(req.params.id);
+  const takedownId = parseInt(req.params.takedownId);
+  const brand = db.getBrand(brandId, req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
+  const reply = db.addTakedownReply({ from, subject, body, direction: direction || 'incoming' }, takedownId, brandId, req.orgId);
+  if (!reply) return res.status(404).json({ error: 'Takedown not found' });
+
+  // If incoming reply on a 'sent' takedown, advance status to waiting_response
+  if ((direction || 'incoming') === 'incoming') {
+    const tdRow = db.getBrandTakedowns(brandId, req.orgId).find(t => t.id === takedownId);
+    if (tdRow && tdRow.status === 'sent') {
+      db.updateBrandTakedown(takedownId, brandId, { status: 'waiting_response' }, req.orgId);
     }
   }
-  
-  res.status(404).json({ error: 'Takedown not found' });
+
+  res.json({ success: true, reply });
 });
 
 router.patch('/:id/takedown/:takedownId', (req, res) => {
   const { status, notes } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (brands[brandIndex].takedowns) {
-    const takedownIndex = brands[brandIndex].takedowns.findIndex((t) => t.id === parseInt(req.params.takedownId));
-    if (takedownIndex !== -1) {
-      if (status) brands[brandIndex].takedowns[takedownIndex].status = status;
-      if (notes) brands[brandIndex].takedowns[takedownIndex].notes = notes;
-    }
-  }
-  
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
+  const brandId = parseInt(req.params.id);
+  const takedownId = parseInt(req.params.takedownId);
+  const brand = db.getBrand(brandId, req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
+  const updates = {};
+  if (status) updates.status = status;
+  if (notes !== undefined) updates.notes = notes;
+  const updated = db.updateBrandTakedown(takedownId, brandId, updates, req.orgId);
+  if (!updated) return res.status(404).json({ error: 'Takedown not found' });
+
   res.json({ success: true });
 });
 
 router.post('/:id/threat', (req, res) => {
   const { domain, threat_type, severity, notes } = req.body;
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brandIndex = brands.findIndex(b => b.id === parseInt(req.params.id));
-  
-  if (brandIndex === -1) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  if (!brands[brandIndex].threats) brands[brandIndex].threats = [];
-  
-  const threat = {
-    id: nextNumericId(),
-    domain,
-    threat_type: threat_type || 'manual',
-    severity: severity || 'medium',
-    notes: notes || '',
+  const brandId = parseInt(req.params.id);
+  const brand = db.getBrand(brandId, req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+
+  const threat = db.addBrandThreat({
+    domain, threat_type, severity, notes,
     detected_at: new Date().toISOString(),
-    status: 'active'
-  };
-  
-  brands[brandIndex].threats.push(threat);
-  db.setSetting('monitored_brands', JSON.stringify(brands), req.orgId);
-  
+  }, brandId, req.orgId);
+
   res.json({ success: true, threat_id: threat.id });
 });
 
 router.get('/:id/threats', (req, res) => {
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const brand = brands.find(b => b.id === parseInt(req.params.id));
-  
-  if (!brand) {
-    return res.status(404).json({ error: 'Brand not found' });
-  }
-  
-  res.json(brand.threats || []);
-});
-
-router.get('/alerts', (req, res) => {
-  const alerts = db.getSetting('brand_alerts', req.orgId) || '[]';
-  const allAlerts = JSON.parse(alerts);
-  res.json(allAlerts.slice(-50).reverse());
+  const brand = db.getBrand(parseInt(req.params.id), req.orgId);
+  if (!brand) return res.status(404).json({ error: 'Brand not found' });
+  res.json(db.getBrandThreats(brand.id, req.orgId));
 });
 
 router.delete('/:id', (req, res) => {
-  // T162 — was missing req.orgId, which read from this tenant but wrote
-  // to the global settings row, leaving the deleted brand in the tenant's
-  // list AND polluting global state. Multi-tenant data-isolation fix.
-  const brands = JSON.parse(db.getSetting('monitored_brands', req.orgId) || '[]');
-  const filtered = brands.filter(b => b.id !== parseInt(req.params.id));
-  db.setSetting('monitored_brands', JSON.stringify(filtered), req.orgId);
-  res.json({ success: true });
+  const brandId = parseInt(req.params.id);
+  // Foreign keys with ON DELETE CASCADE handle threats / takedowns /
+  // replies / safe_entries / alerts cleanup automatically.
+  const ok = db.deleteBrand(brandId, req.orgId);
+  res.json({ success: ok });
 });
 
 module.exports = router;
