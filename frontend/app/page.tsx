@@ -8,7 +8,7 @@ import {
   FileText, BarChart3, Bell, Plug, Clock, Wrench,
   TrendingUp, TrendingDown, Minus, Download, Trash2,
   CheckSquare, Square, MoreHorizontal, Save, MailPlus,
-  X
+  X, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1015,6 +1015,16 @@ export default function Dashboard() {
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-sm font-bold text-[#1a0d04] ring-2 ring-orange-500/20 ring-offset-2 ring-offset-background flex-shrink-0">
                     {(user?.name || user?.email || 'OB').slice(0, 2).toUpperCase()}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                    onClick={logout}
+                    title="Sign out"
+                    aria-label="Sign out"
+                  >
+                    <LogOut className="w-[18px] h-[18px]" />
+                  </Button>
                 </div>
               </div>
             </div>
