@@ -1,4 +1,6 @@
-// DNS Provider Factory - 20+ Real Providers
+// DNS Provider Factory — 20 production providers with real API access.
+// Stubs (Aliyun, Domains.co.za, WebAfrica, HostAfrica, MWeb, Afrihost, CoolIdeas)
+// were retired in T161; they returned synthetic success without editing DNS.
 
 const { CloudflareProvider: RealCloudflare } = require('./cloudflare');
 const { AWSRoute53Provider: RealAWS } = require('./aws');
@@ -238,15 +240,6 @@ class AzureDNSProvider extends DNSProvider {
   async testConnection() { return { success: true, latency: 65 }; }
 }
 
-// 16. Aliyun - REST API
-class AliyunProvider extends DNSProvider {
-  constructor(config) { super(config); this.accessKeyId = config.access_key_id; this.accessKeySecret = config.access_key_secret; this.region = config.region || 'cn-hangzhou'; }
-  async createTXTRecord(name, content, domain) {
-    return { success: true, provider: 'aliyun', note: 'SDK required for full implementation' }; // Requires Aliyun SDK
-  }
-  async testConnection() { return { success: true, latency: 120 }; }
-}
-
 // 17. DNSPod - REST API (Tencent)
 class DNSPodProvider extends DNSProvider {
   constructor(config) { super(config); this.token = config.token; }
@@ -348,7 +341,6 @@ function getProvider(providerName, credentials) {
     'google': GoogleDNSProvider,
     'azure dns': AzureDNSProvider,
     'azure': AzureDNSProvider,
-    'aliyun': AliyunProvider,
     'dnspod': DNSPodProvider,
     'ns1': NS1Provider,
     'bunny dns': BunnyDNSProvider,
@@ -377,44 +369,6 @@ function getProvider(providerName, credentials) {
   }
   providers['hetzner dns'] = HetznerDNSProvider;
   providers['hetzner'] = HetznerDNSProvider;
-
-  // South African Providers (Registrar/DNS - limited API)
-  class DomainsCoZaProvider extends DNSProvider { // Note: No public DNS API, only for registrar
-    constructor(config) { super(config); }
-    async testConnection() { return { success: true, latency: 150, note: 'Reseller API only - no DNS management' }; }
-  }
-  providers['domains.co.za'] = DomainsCoZaProvider;
-  providers['domainscoza'] = DomainsCoZaProvider;
-
-  class WebAfricaProvider extends DNSProvider {
-    constructor(config) { super(config); this.clientCode = config.client_code; this.password = config.password; }
-    async testConnection() { return { success: true, latency: 120, note: 'Beta API - limited DNS' }; }
-  }
-  providers['webafrica'] = WebAfricaProvider;
-
-  class HostAfricaProvider extends DNSProvider {
-    constructor(config) { super(config); }
-    async testConnection() { return { success: true, latency: 100, note: 'Managed DNS via client area' }; }
-  }
-  providers['hostafrica'] = HostAfricaProvider;
-
-  class MWebProvider extends DNSProvider {
-    constructor(config) { super(config); }
-    async testConnection() { return { success: true, latency: 110 }; }
-  }
-  providers['mweb'] = MWebProvider;
-
-  class AfrihostProvider extends DNSProvider {
-    constructor(config) { super(config); }
-    async testConnection() { return { success: true, latency: 95 }; }
-  }
-  providers['afrihost'] = AfrihostProvider;
-
-  class CoolIdeasProvider extends DNSProvider {
-    constructor(config) { super(config); }
-    async testConnection() { return { success: true, latency: 90 }; }
-  }
-  providers['coolideas'] = CoolIdeasProvider;
 
   const ProviderClass = providers[providerName.toLowerCase()];
   return ProviderClass ? new ProviderClass(credentials) : null;

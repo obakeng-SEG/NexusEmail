@@ -969,7 +969,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <div className="nbp-mark w-10 h-10 text-[14px]">NBP</div>
                 <div className="leading-tight">
-                  <p className="eyebrow">Hosted</p>
+                  <p className="eyebrow">Premium</p>
                   <h1 className="text-[15px] font-display font-bold tracking-tight">Nexus Brand Protection</h1>
                 </div>
               </div>
