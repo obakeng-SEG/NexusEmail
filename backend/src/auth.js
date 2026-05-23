@@ -25,12 +25,22 @@ function verifyToken(token) {
   if (!token) return null;
   const parts = token.split('.');
   if (parts.length !== 3) return null;
-  const unsigned = `${parts[0]}.${parts[1]}`;
-  const expected = crypto.createHmac('sha256', JWT_SECRET).update(unsigned).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(parts[2]), Buffer.from(expected))) return null;
-  const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-  return payload;
+  try {
+    const unsigned = `${parts[0]}.${parts[1]}`;
+    const expected = crypto.createHmac('sha256', JWT_SECRET).update(unsigned).digest('base64url');
+    const provided = Buffer.from(parts[2]);
+    const expectedBuf = Buffer.from(expected);
+    // T163 — crypto.timingSafeEqual throws RangeError on length mismatch,
+    // which used to bubble to HTTP 500. Reject malformed tokens cleanly.
+    if (provided.length !== expectedBuf.length) return null;
+    if (!crypto.timingSafeEqual(provided, expectedBuf)) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch (e) {
+    // Any base64 / JSON parse failure on a malformed token = no auth.
+    return null;
+  }
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {

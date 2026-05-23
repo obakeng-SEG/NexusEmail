@@ -80,6 +80,18 @@ export default function Dashboard() {
       ...(options.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     }
+  }).then(async (res) => {
+    // T163 — if our session is invalid/expired, clear local state and bounce
+    // back to the login flow rather than silently swallowing the failure
+    // and leaving the UI empty (which is what made it look like data
+    // disappeared).
+    if (res.status === 401) {
+      localStorage.removeItem('nexusemail_token');
+      localStorage.removeItem('nexusemail_user');
+      setToken(null);
+      setUser(null);
+    }
+    return res;
   });
 
   // Load local session or consume a short-lived WHMCS handoff token.
@@ -285,7 +297,19 @@ export default function Dashboard() {
   const loadDomains = async () => {
     try {
       const res = await apiFetch(`${API_BASE}/domains`);
+      if (!res.ok) {
+        // 401 already handled by apiFetch; for other errors, surface them
+        // instead of leaving setDomains([]) which looks like data loss.
+        if (res.status !== 401) {
+          console.error(`Failed to load domains: HTTP ${res.status}`);
+        }
+        return;
+      }
       const data = await res.json();
+      if (!Array.isArray(data)) {
+        console.error('Failed to load domains: API returned non-array', data);
+        return;
+      }
       setDomains(data);
       if (data.length > 0) setSelectedDomain(data[0]);
     } catch (e) {
@@ -981,9 +1005,15 @@ export default function Dashboard() {
                 <Button variant="ghost" size="icon" onClick={() => setDarkMode(!darkMode)} className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-white/5">
                   {darkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
                 </Button>
-                <div className="ml-3 flex items-center gap-2 pl-4 border-l border-white/5">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-sm font-bold text-[#1a0d04] ring-2 ring-orange-500/20 ring-offset-2 ring-offset-background">
-                    {(user?.name || 'OB').slice(0, 2).toUpperCase()}
+                <div className="ml-3 flex items-center gap-3 pl-4 border-l border-white/5">
+                  {user?.email && (
+                    <div className="hidden sm:block text-right leading-tight">
+                      <p className="text-xs font-medium text-foreground truncate max-w-[180px]">{user.name || user.email}</p>
+                      <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">{user.email}</p>
+                    </div>
+                  )}
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-sm font-bold text-[#1a0d04] ring-2 ring-orange-500/20 ring-offset-2 ring-offset-background flex-shrink-0">
+                    {(user?.name || user?.email || 'OB').slice(0, 2).toUpperCase()}
                   </div>
                 </div>
               </div>
